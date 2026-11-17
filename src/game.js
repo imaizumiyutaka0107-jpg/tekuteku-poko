@@ -8,7 +8,7 @@
 
 // W × H is what the screen shows. A stage may be taller than H rows (a tower to climb); the
 // view then follows Poko up (see viewTop).
-export const W = 10, H = 15;
+export const W = 12, H = 18; // the view, in cells (a stage may be taller: a tower; older stages were 10 × 15)
 export const EMPTY = 0, ROCK = 1, BLOCK = 2;
 export const START_DELAY = 2.5; // seconds before Poko sets off
 const WALK = 0.55; // seconds per step
@@ -38,22 +38,23 @@ export const PIECE_COLOR = { dot: 1, bar2: 2, bar3: 3, corner: 4, O: 5, I: 6, L:
  */
 export function parseStage(def) {
   const h = def.rows.length;
-  const grid = new Uint8Array(W * h);
-  const colors = new Uint8Array(W * h);
+  const w = def.rows[0].length;
+  const grid = new Uint8Array(w * h);
+  const colors = new Uint8Array(w * h);
   let walker = null, exit = null;
   const stars = [];
   def.rows.forEach((row, y) => {
-    if (row.length !== W) throw new Error(`row ${y} is ${row.length} wide`);
+    if (row.length !== w) throw new Error(`row ${y} is ${row.length} wide, not ${w}`);
     [...row].forEach((ch, x) => {
-      if (ch === '#') grid[y * W + x] = ROCK;
-      else if (ch === 'B') grid[y * W + x] = BLOCK;
+      if (ch === '#') grid[y * w + x] = ROCK;
+      else if (ch === 'B') grid[y * w + x] = BLOCK;
       else if (ch === 'R' || ch === 'L') walker = { x, y, dir: ch === 'R' ? 1 : -1 };
       else if (ch === 'E') exit = { x, y };
       else if (ch === '*') stars.push({ x, y, got: false });
     });
   });
-  if (h < H || !walker || !exit) throw new Error('a stage needs at least 15 rows, Poko and a door');
-  return { h, grid, colors, walker, exit, stars };
+  if (h < 15 || !walker || !exit) throw new Error('a stage needs at least 15 rows, Poko and a door');
+  return { h, w, grid, colors, walker, exit, stars };
 }
 
 export function makeGame(def, rand = Math.random) {
@@ -61,6 +62,7 @@ export function makeGame(def, rand = Math.random) {
   const g = {
     ...st,
     walker: { ...st.walker, fromX: st.walker.x, fromY: st.walker.y, act: 'idle' },
+    vh: Math.min(st.h, Math.round(st.w * 1.5)), // rows on screen: 18 on the 12-wide board
     waterEvery: (def.water ?? 14) * MAGMA_SLOW, // seconds for the magma to rise one row
     bombs: def.bombs ?? false,
     weights: def.weights ?? WEIGHTS, // how often each piece comes (harder shapes later on)
@@ -87,15 +89,29 @@ function pickKind(g) {
   return 'dot';
 }
 
-export const at = (g, x, y) => g.grid[y * W + x];
+export const at = (g, x, y) => g.grid[y * g.w + x];
 export const pieceCells = (p) => p.cells.map(([cx, cy]) => [p.x + cx, p.y + cy]);
 
 // For pieces: Poko is solid to a piece moved or turned sideways into him, but one that comes
 // down on top of him squashes him (see fall).
 function blockedForPiece(g, x, y, walkerSolid = true) {
-  if (x < 0 || x >= W || y >= g.h) return true;
+  if (x < 0 || x >= g.w || y >= g.h) return true;
   if (y < 0) return false;
-  return at(g, x, y) !== EMPTY || (walkerSolid && g.walker.x === x && g.walker.y === y);
+  if (at(g, x, y) !== EMPTY) return true;
+  if (!walkerSolid) return false;
+  const p = pokoCell(g);
+  return p.x === x && p.y === y;
+}
+
+/**
+ * The cell Poko counts as being in, for the falling pieces: the one he is drawn in. A step
+ * takes him a moment, so until he is halfway across he still counts as where he came from
+ * (otherwise a block landing in front of him would squash him while it plainly misses).
+ */
+export function pokoCell(g) {
+  const w = g.walker;
+  if (g.time < START_DELAY || (w.act !== 'walk' && w.act !== 'climb')) return { x: w.x, y: w.y };
+  return g.walkT < walkerInterval(g) / 2 ? { x: w.fromX, y: w.fromY } : { x: w.x, y: w.y };
 }
 function fits(g, p, walkerSolid = true) { return pieceCells(p).every(([x, y]) => !blockedForPiece(g, x, y, walkerSolid)); }
 
@@ -112,8 +128,9 @@ export function landsOnWalker(g) {
  */
 export function crushGap(g) {
   if (g.status !== 'play' || !landsOnWalker(g)) return -1;
-  const above = pieceCells(g.piece).filter(([x]) => x === g.walker.x).map(([, y]) => y);
-  return above.length ? Math.max(0, g.walker.y - Math.max(...above) - 1) : -1;
+  const at = pokoCell(g);
+  const above = pieceCells(g.piece).filter(([x]) => x === at.x).map(([, y]) => y);
+  return above.length ? Math.max(0, at.y - Math.max(...above) - 1) : -1;
 }
 
 /**
@@ -129,8 +146,8 @@ function fall(g, byPlayer = true) {
     if (g.gentle && !byPlayer) return false;
     for (const [x, y] of pieceCells(g.piece)) {
       if (y < 0) continue;
-      g.grid[y * W + x] = BLOCK;
-      g.colors[y * W + x] = PIECE_COLOR[g.piece.kind];
+      g.grid[y * g.w + x] = BLOCK;
+      g.colors[y * g.w + x] = PIECE_COLOR[g.piece.kind];
     }
     g.events.push({ type: 'lock', cells: pieceCells(g.piece) });
     g.piece = null;
@@ -143,7 +160,7 @@ function fall(g, byPlayer = true) {
 
 // For Poko: the edges, the ground and the falling piece are all solid.
 function blockedForWalker(g, x, y) {
-  if (x < 0 || x >= W || y < 0 || y >= g.h) return true;
+  if (x < 0 || x >= g.w || y < 0 || y >= g.h) return true;
   if (at(g, x, y) !== EMPTY) return true;
   return !!g.piece && pieceCells(g.piece).some(([px, py]) => px === x && py === y);
 }
@@ -156,7 +173,7 @@ function spawn(g) {
   // New pieces appear at the top of the view, in the middle (a little higher, or to the side,
   // if a ledge is in the way).
   const top = viewTop(g);
-  const mid = Math.floor((W - width) / 2);
+  const mid = Math.floor((g.w - width) / 2);
   g.gravT = 0;
   for (let y = top; y >= Math.max(0, top - 6); y--) {
     for (const dx of [0, -1, 1, -2, 2, -3, 3]) {
@@ -213,17 +230,25 @@ function lock(g) {
     const [bx, by] = cells[0];
     for (let y = by; y <= by + 2; y++) {
       for (let x = bx - 1; x <= bx + 1; x++) {
-        if (x >= 0 && x < W && y < g.h && at(g, x, y) === BLOCK) g.grid[y * W + x] = EMPTY;
+        if (x >= 0 && x < g.w && y < g.h && at(g, x, y) === BLOCK) g.grid[y * g.w + x] = EMPTY;
       }
     }
     g.events.push({ type: 'boom', x: bx, y: by + 1 });
   } else {
     for (const [x, y] of cells) {
       if (y < 0) continue;
-      g.grid[y * W + x] = BLOCK;
-      g.colors[y * W + x] = PIECE_COLOR[p.kind];
+      g.grid[y * g.w + x] = BLOCK;
+      g.colors[y * g.w + x] = PIECE_COLOR[p.kind];
     }
     g.events.push({ type: 'lock', cells });
+    // Landed in the cell he was just stepping into: he bumps into it and turns back.
+    const w = g.walker;
+    if (cells.some(([x, y]) => x === w.x && y === w.y)) {
+      w.x = w.fromX; w.y = w.fromY;
+      w.dir = -w.dir;
+      w.act = 'turn';
+      g.walkT = 0;
+    }
     checkNearMiss(g, cells);
   }
   g.piece = null;
@@ -283,7 +308,8 @@ export const walkerInterval = (g) => (g.walker.act === 'fall' ? FALL : WALK);
 export const waterTop = (g) => g.h - g.water;
 
 /** The first stage row on screen: Poko is kept about two-thirds of the way down. */
-export const viewTop = (g) => Math.max(0, Math.min(g.h - H, g.walker.y - 10));
+// The view: g.w × g.vh cells (12 × 18; a stage from the old 10-column board gets 10 × 15).
+export const viewTop = (g) => Math.max(0, Math.min(g.h - g.vh, g.walker.y - Math.round((g.vh * 2) / 3)));
 
 function end(g, status, reason = null) {
   g.status = status;

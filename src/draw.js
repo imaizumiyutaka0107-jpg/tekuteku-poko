@@ -573,7 +573,7 @@ function seeded(seed) {
 }
 
 function paintForest(c) {
-  const BW = W * CELL, BH = H * CELL, r = seeded(11);
+  const BW = 400, BH = 600, r = seeded(11);
   const sky = c.createLinearGradient(0, 0, 0, BH);
   sky.addColorStop(0, '#9fdcef'); sky.addColorStop(0.55, '#d4f1dc'); sky.addColorStop(1, '#eefbe6');
   c.fillStyle = sky; c.fillRect(0, 0, BW, BH);
@@ -607,7 +607,7 @@ function paintForest(c) {
 }
 
 function paintCave(c) {
-  const BW = W * CELL, BH = H * CELL, r = seeded(23);
+  const BW = 400, BH = 600, r = seeded(23);
   const bg = c.createLinearGradient(0, 0, 0, BH);
   bg.addColorStop(0, '#1d1828'); bg.addColorStop(0.6, '#2f2640'); bg.addColorStop(1, '#43344f');
   c.fillStyle = bg; c.fillRect(0, 0, BW, BH);
@@ -646,7 +646,7 @@ function paintCave(c) {
 }
 
 function paintRuins(c) {
-  const BW = W * CELL, BH = H * CELL, r = seeded(37);
+  const BW = 400, BH = 600, r = seeded(37);
   const sky = c.createLinearGradient(0, 0, 0, BH);
   sky.addColorStop(0, '#f2a46f'); sky.addColorStop(0.5, '#ffd39a'); sky.addColorStop(1, '#fff0cf');
   c.fillStyle = sky; c.fillRect(0, 0, BW, BH);
@@ -686,12 +686,12 @@ function paintRuins(c) {
 const PAINT = { forest: paintForest, cave: paintCave, ruins: paintRuins };
 const sceneryCache = {};
 /** The scenery behind the board, painted once (at double resolution, for sharp phone screens). */
-function scenery(theme) {
+export function scenery(theme) {
   if (!sceneryCache[theme] && typeof document !== 'undefined') {
     const cv = document.createElement('canvas');
-    cv.width = W * CELL * 2; cv.height = H * CELL * 2;
+    cv.width = 960; cv.height = 1440; // painted in 400 × 600 units (a 2 : 3 board), sharp up to 2.4× that
     const c = cv.getContext('2d');
-    c.scale(2, 2);
+    c.scale(2.4, 2.4);
     PAINT[theme](c);
     sceneryCache[theme] = cv;
   }
@@ -704,17 +704,17 @@ export function drawBoard(ctx, g, t, colors, fx) {
   const bg = g.theme && PAINT[g.theme] ? scenery(g.theme) : null;
   if (bg) {
     colors = { ...colors, ...THEME_COLORS[g.theme] };
-    ctx.drawImage(bg, 0, 0, W * CELL, H * CELL);
+    ctx.drawImage(bg, 0, 0, g.w * CELL, g.vh * CELL);
     if (g.theme === 'cave') { // crystals breathing
       ctx.fillStyle = `rgba(150,220,255,${0.04 + Math.sin(t * 1.5) * 0.03})`;
-      ctx.fillRect(0, 0, W * CELL, H * CELL);
+      ctx.fillRect(0, 0, g.w * CELL, g.vh * CELL);
     }
   } else {
-    const sky = ctx.createLinearGradient(0, 0, 0, H * CELL);
+    const sky = ctx.createLinearGradient(0, 0, 0, g.vh * CELL);
     sky.addColorStop(0, colors.skyTop);
     sky.addColorStop(1, colors.skyBottom);
     ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, W * CELL, H * CELL);
+    ctx.fillRect(0, 0, g.w * CELL, g.vh * CELL);
   }
 
   // The view glides after Poko on stages taller than the screen.
@@ -726,11 +726,11 @@ export function drawBoard(ctx, g, t, colors, fx) {
   ctx.save();
   ctx.translate(0, -cam * CELL);
 
-  for (let y = Math.max(0, Math.floor(cam)); y < Math.min(g.h, Math.ceil(cam) + H + 1); y++) {
-    for (let x = 0; x < W; x++) {
+  for (let y = Math.max(0, Math.floor(cam)); y < Math.min(g.h, Math.ceil(cam) + g.vh + 1); y++) {
+    for (let x = 0; x < g.w; x++) {
       const c = at(g, x, y);
       if (c === ROCK) drawRock(ctx, g, x, y, colors);
-      else if (c === BLOCK) drawBlock(ctx, x * CELL, y * CELL, BLOCK_COLORS[g.colors[y * W + x]]);
+      else if (c === BLOCK) drawBlock(ctx, x * CELL, y * CELL, BLOCK_COLORS[g.colors[y * g.w + x]]);
     }
   }
   drawDoor(ctx, g.exit.x, g.exit.y, t);
@@ -891,7 +891,7 @@ function drawDoorAbove(ctx, g, t) {
  * the board when it is nearly at his feet.
  */
 function drawMagma(ctx, g, t, danger, cam) {
-  const BW = W * CELL, BH = g.h * CELL;
+  const BW = g.w * CELL, BH = g.h * CELL;
   const top = waterTop(g) * CELL;
   const surf = (x) => top + Math.sin(x / 22 + t * 2.4) * 3 + Math.sin(x / 9 - t * 3.1) * 1.2;
   if (top < BH) {
@@ -956,7 +956,7 @@ function drawMagma(ctx, g, t, danger, cam) {
 
 /** Gauge on the left edge of the screen: magma level against Poko's middle (where it gets him). */
 function drawMagmaGauge(ctx, g, t, danger, cam) {
-  const BW = W * CELL, BH = H * CELL;
+  const BW = g.w * CELL, BH = g.vh * CELL;
   const top = (waterTop(g) - cam) * CELL;
   const limit = (g.walker.y + 0.5 - cam) * CELL;
   ctx.fillStyle = 'rgba(0,0,0,0.3)';

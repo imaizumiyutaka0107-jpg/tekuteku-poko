@@ -2,8 +2,8 @@
 // Plays the same with a finger (buttons or gestures on the board), a mouse, or a keyboard.
 import { W, H, waterTop, makeGame, update, move, rotate, hardDrop, setSoft, takeEvents, starsGot, crushGap } from './game.js';
 import { getStage, climbOf } from './stages.js';
-import { weekOf, weekStart, weekEnd, weeklyStage, weeklyBlocks } from './gen/weekly-v1.js';
-import { CELL, drawBoard, drawPiecePreview, drawPoko, themeOf } from './draw.js';
+import { weekOf, weekStart, weekEnd, weeklyStage, weeklyBlocks } from './gen/weekly.js';
+import { CELL, drawBoard, drawPiecePreview, drawPoko, themeOf, scenery } from './draw.js';
 import { t, detectLang, setCurrentLang, getCurrentLang, LANGS } from './i18n.js';
 
 // ---------- Saved progress and settings ----------
@@ -217,11 +217,19 @@ function weeklySpec(week) {
 function playStage(spec) {
   const { n } = spec;
   const weekly = spec.week !== undefined;
+  const rows = (list) => list.map(([k, v]) => `<li><kbd>${k}</kbd><span>${v}</span></li>`).join('');
   app.innerHTML = `
+    <canvas class="pc-backdrop" aria-hidden="true"></canvas>
+    <aside class="pc-panel">
+      <button class="pc-full">⛶ ${t('fullscreen')}</button>
+      <h2>${t('controls')}</h2>
+      <ul class="pc-keys">${rows(t('pcMouse'))}</ul>
+      <ul class="pc-keys">${rows(t('pcKeys'))}</ul>
+    </aside>
     <header class="topbar play-bar">
       <a class="icon-btn" href="#/" aria-label="${t('back')}">‹</a>
       <div class="stage-name"><b>${spec.title}</b><span><span class="star-row" aria-label="${t('stars')}"></span>${weekly ? '<span class="timer">0.0</span>' : ''}</span></div>
-      <div class="next-box"><span>${t('next')}</span><canvas class="next" width="96" height="96"></canvas></div>
+      <div class="next-box"><span>${t('next')}</span><canvas class="next" width="192" height="192"></canvas></div>
       <button class="icon-btn pause" aria-label="${t('pause')}">Ⅱ</button>
     </header>
     <div class="board-wrap">
@@ -278,11 +286,39 @@ function playStage(spec) {
     const dpr = window.devicePixelRatio || 1;
     const width = canvas.clientWidth;
     canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(width * (H / W) * dpr);
-    ctx.setTransform((width / (W * CELL)) * dpr, 0, 0, (width / (W * CELL)) * dpr, 0, 0);
+    const cols = g ? g.w : W, rows = g ? g.vh : H;
+    canvas.height = Math.round(width * (rows / cols) * dpr);
+    ctx.setTransform((width / (cols * CELL)) * dpr, 0, 0, (width / (cols * CELL)) * dpr, 0, 0);
   }
   const ro = new ResizeObserver(resize);
   ro.observe(canvas);
+
+  // PC version: the stage's scenery spread across the whole window behind the panels (cover-fit,
+  // softened by CSS), and a full-screen switch.
+  const backdrop = $('.pc-backdrop');
+  function paintBackdrop() {
+    if (getComputedStyle($('.pc-panel')).display === 'none') return; // phone layout
+    const img = scenery(themeOf(n, spec.week));
+    if (!img) return;
+    const w = innerWidth, h = innerHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
+    backdrop.width = Math.round(w * dpr); backdrop.height = Math.round(h * dpr);
+    // Drawn a little larger than cover so the soft edges stay off screen; softened and dimmed
+    // in the canvas itself (a CSS filter on a window-sized canvas fails on some graphics chips).
+    const s = Math.max(backdrop.width / img.width, backdrop.height / img.height) * 1.04;
+    const bc = backdrop.getContext('2d');
+    bc.filter = `blur(${Math.round(6 * dpr)}px)`;
+    bc.drawImage(img, (backdrop.width - img.width * s) / 2, (backdrop.height - img.height * s) / 2, img.width * s, img.height * s);
+    bc.filter = 'none';
+    bc.fillStyle = 'rgba(12, 16, 30, 0.3)';
+    bc.fillRect(0, 0, backdrop.width, backdrop.height);
+  }
+  paintBackdrop();
+  window.addEventListener('resize', paintBackdrop);
+  const toggleFull = () => {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else document.documentElement.requestFullscreen?.().catch(() => {});
+  };
+  $('.pc-full').onclick = (e) => { toggleFull(); e.currentTarget.blur(); };
 
   // ----- Input -----
   const act = (fn) => { if (!paused && g.status === 'play') fn(); };
@@ -308,13 +344,42 @@ function playStage(spec) {
 
   // On the board: drag sideways to move, tap to turn, swipe down to drop.
   let drag = null;
+  // With a mouse (the PC version): the block follows the pointer across, a click drops it, a
+  // right click or the wheel turns it.
+  function followMouse(e) {
+    if (!g.piece) return;
+    const r = canvas.getBoundingClientRect();
+    const col = Math.floor(((e.clientX - r.left) / r.width) * g.w);
+    const width = Math.max(...g.piece.cells.map((c) => c[0])) + 1;
+    const want = Math.max(0, Math.min(g.w - width, col - Math.floor((width - 1) / 2)));
+    for (let k = 0; k < g.w && g.piece.x !== want; k++) {
+      const before = g.piece.x;
+      act(() => move(g, want > g.piece.x ? 1 : -1));
+      if (!g.piece || g.piece.x === before) break; // blocked
+    }
+  }
+  let wheelAt = 0;
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (performance.now() - wheelAt < 120) return; // one turn per notch, not per pixel
+    wheelAt = performance.now();
+    act(() => rotate(g));
+  }, { passive: false });
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse') {
+      e.preventDefault();
+      if (e.button === 2) act(() => rotate(g));
+      else if (e.button === 0) { followMouse(e); act(() => hardDrop(g)); }
+      return;
+    }
     drag = { x: e.clientX, y: e.clientY, at: performance.now(), moved: 0, travelled: 0 };
     try { canvas.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
   });
   canvas.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'mouse') { followMouse(e); return; }
     if (!drag) return;
-    const cell = canvas.clientWidth / W;
+    const cell = canvas.clientWidth / g.w;
     const cells = Math.trunc((e.clientX - drag.x) / cell);
     drag.travelled = Math.max(drag.travelled, Math.hypot(e.clientX - drag.x, e.clientY - drag.y));
     while (drag.moved < cells) { act(() => move(g, 1)); drag.moved++; }
@@ -324,7 +389,7 @@ function playStage(spec) {
     if (!drag) return;
     const dy = e.clientY - drag.y, dx = e.clientX - drag.x;
     const quick = performance.now() - drag.at < 350;
-    const cell = canvas.clientWidth / W;
+    const cell = canvas.clientWidth / g.w;
     if (drag.travelled < 10 && quick) act(() => rotate(g));
     else if (dy > cell * 1.5 && dy > Math.abs(dx) * 1.5 && drag.moved === 0) act(() => hardDrop(g));
     drag = null;
@@ -335,6 +400,7 @@ function playStage(spec) {
     if (e.target.closest?.('input, textarea')) return;
     const k = e.key;
     if (k === 'Escape' || k === 'p' || k === 'P') { togglePause(); e.preventDefault(); return; }
+    if ((k === 'f' || k === 'F') && !e.repeat) { toggleFull(); e.preventDefault(); return; }
     if (k === 'ArrowLeft' || k === 'a' || k === 'A') act(() => move(g, -1));
     else if (k === 'ArrowRight' || k === 'd' || k === 'D') act(() => move(g, 1));
     else if (k === 'ArrowUp' || k === 'x' || k === 'X' || k === 'w' || k === 'W') { if (!e.repeat) act(() => rotate(g)); }
@@ -463,7 +529,7 @@ function playStage(spec) {
     }
     if (weekly) timerEl.textContent = t('secs', secs(g.time));
     drawBoard(ctx, g, time, colors, fx);
-    if (g.next) drawPiecePreview(nextCtx, g.next, 96, time);
+    if (g.next) drawPiecePreview(nextCtx, g.next, 192, time);
     requestAnimationFrame(loop);
   }
 
@@ -479,6 +545,7 @@ function playStage(spec) {
     alive = false;
     stopRepeat();
     ro.disconnect();
+    window.removeEventListener('resize', paintBackdrop);
     document.removeEventListener('keydown', onKey);
     document.removeEventListener('keyup', onKeyUp);
     document.removeEventListener('visibilitychange', onHide);

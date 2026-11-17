@@ -10,7 +10,10 @@
 //
 // It depends only on parseStage and the cell codes from game.js (the map format), and on its own
 // copy of Poko's walk, so changes to the game's rules or drawing can't change the stages.
-import { W, H, parseStage, at, EMPTY } from '../game.js';
+import { parseStage, at, EMPTY } from '../game.js';
+// v1 makes 10 × 15 stages (the size of the game until 17 Nov 2026). Its checks (walkTo, planPath,
+// stuckAfter, ...) read each map's own width, so later makers can use them for wider stages.
+const W = 10, H = 15;
 
 const EMPTY_ROW = '..........';
 
@@ -62,10 +65,10 @@ export const climbOf = (def) => { const s = parseStage(def); return s.walker.y -
  * Poko's walk on a fixed map from `from` (default: his start). Returns where he first gets to
  * that `goal(x, y)` accepts ({x, y, dir}), or null if he never does.
  */
-function walkTo(rows, goal, from) {
-  const { h, grid, walker, exit } = parseStage({ rows });
-  const g = { grid };
-  const solid = (x, y) => x < 0 || x >= W || y < 0 || y >= h || at(g, x, y) !== EMPTY;
+export function walkTo(rows, goal, from) {
+  const { h, w, grid, walker, exit } = parseStage({ rows });
+  const g = { grid, w };
+  const solid = (x, y) => x < 0 || x >= w || y < 0 || y >= h || at(g, x, y) !== EMPTY;
   let { x, y, dir } = from || walker;
   goal ||= (px, py) => px === exit.x && py === exit.y;
   for (let i = 0; i < 600; i++) {
@@ -163,7 +166,7 @@ export const magmaSpeed = (def, n) => timing(def, n).every;
  */
 export function stuckAfter(def) {
   const s = parseStage(def);
-  const solid = (x, y) => x < 0 || x >= W || y < 0 || y >= s.h || at(s, x, y) !== EMPTY;
+  const solid = (x, y) => x < 0 || x >= s.w || y < 0 || y >= s.h || at(s, x, y) !== EMPTY;
   let { x, y, dir } = s.walker;
   let t = 2.5; // the start delay
   for (let i = 0; i < 200; i++) {

@@ -8,54 +8,56 @@
 // is fair.
 import * as v1 from './gen/v1.js';
 import * as v2 from './gen/v2.js';
+import * as v3 from './gen/v3.js';
 
-const EMPTY_ROW = '..........';
+// The board is 12 × 18 cells (it was 10 × 15 until 17 Nov 2026).
+const EMPTY_ROW = '............';
 const top = (n) => Array(n).fill(EMPTY_ROW);
 
 const HAND_MAPS = [
   // 1. Fill the hole. (The door sits up a little rock stair Poko climbs by himself.)
-  { gentle: true, rows: [...top(9),
-    '.........E',
-    '........##',
-    'R.*..*.###',
-    '####..####',
-    '####*.####',
-    '##########'] },
+  { gentle: true, rows: [...top(12),
+    '...........E',
+    '..........##',
+    'R...*..*.###',
+    '######..####',
+    '######*.####',
+    '############'] },
   // 2. A wall: give Poko some steps.
-  { gentle: true, rows: [...top(9),
-    '.*.....*.E',
-    '......####',
-    '......####',
-    'R.*...####',
-    '##########',
-    '##########'] },
+  { gentle: true, rows: [...top(12),
+    '...*.....*.E',
+    '........####',
+    '........####',
+    'R...*...####',
+    '############',
+    '############'] },
   // 3. The tower: a long staircase.
-  { gentle: true, rows: [...top(6),
-    '........*E',
-    '........##',
-    '........##',
-    '.....*..##',
-    '.....#..##',
-    '.....#..##',
-    'R.*..#..##',
-    '##########',
-    '##########'] },
+  { gentle: true, rows: [...top(9),
+    '..........*E',
+    '..........##',
+    '..........##',
+    '.......*..##',
+    '.......#..##',
+    '.......#..##',
+    'R...*..#..##',
+    '############',
+    '############'] },
   // 4. Poko heads the wrong way: stop him or fill the hole.
-  { rows: [...top(9),
-    '........*E',
-    '........##',
-    '..*...L###',
-    '#...######',
-    '#*..######',
-    '##########'] },
+  { rows: [...top(12),
+    '..........*E',
+    '..........##',
+    '..*.....L###',
+    '#...########',
+    '#*..########',
+    '############'] },
   // 5. Bombs clear blocks (never rock).
-  { bombs: true, first: ['bomb'], rows: [...top(9),
-    '....*.....',
-    '....BB...E',
-    '....BB..##',
-    'R.*.BB*###',
-    '##########',
-    '##########'] },
+  { bombs: true, first: ['bomb'], rows: [...top(12),
+    '......*.....',
+    '......BB...E',
+    '......BB..##',
+    'R...*.BB*###',
+    '############',
+    '############'] },
 ];
 
 // For the rest of the game and the tests.
@@ -70,7 +72,9 @@ export const { shapeHardness, pieceWeights, climbMedian, climbOf, walksHome, pla
 // v2 replaced v1 for every stage on 17 Nov 2026, one day after the game first went public
 // (doors raised after phone play-testing); the fingerprints were recorded again then. From now
 // on, only add eras.
-const ERAS = [{ from: 6, make: v2.generate }];
+//
+// v3 (the 12 × 18 board) replaced v2 for every stage the same day, after more play-testing.
+const ERAS = [{ from: 6, make: v3.generate }];
 
 /** Stage n (6 and up), made from its number by the maker of its era. */
 export function generateStage(n) {
