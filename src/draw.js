@@ -1,6 +1,7 @@
 // Drawing the stage: rock, blocks, the falling piece and where it will land, Poko, the door,
 // stars and the water. Everything is in board units: one cell is CELL wide.
 import { W, H, ROCK, BLOCK, at, pieceCells, dropDistance, landsOnWalker, crushGap, walkerInterval, waterTop, viewTop, START_DELAY, SHAPES, PIECE_COLOR, TRIP } from './game.js';
+import { realBackground, realTerrain, realCrate, realStone, realLava } from './real.js';
 
 export const CELL = 40;
 export const BLOCK_COLORS = ['#9aa3b5', '#ff6b8b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#748ffc', '#b197fc', '#f783ac', '#63e6be', '#ff8787'];
@@ -10,7 +11,17 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h);
 }
 
+/** The realistic look (textured rock, crates, lava); false brings back the flat cartoon look. */
+export const REAL = true;
+
 export function drawBlock(ctx, x, y, color, size = CELL, alpha = 1) {
+  if (REAL && typeof document !== 'undefined') {
+    // A crate stained in the piece's colour (grey: a stage's own breakable stone).
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(color === BLOCK_COLORS[0] ? realStone() : realCrate(color), x, y, size, size);
+    ctx.globalAlpha = 1;
+    return;
+  }
   ctx.globalAlpha = alpha;
   ctx.fillStyle = color;
   roundRect(ctx, x + 1.5, y + 1.5, size - 3, size - 3, size * 0.22);
@@ -76,6 +87,42 @@ function drawRock(ctx, g, x, y, colors) {
     roundRect(ctx, px - 1, py - 2, CELL + 2, 10, 5);
     ctx.fill();
   }
+}
+
+/** The realistic door: wooden planks in a stone arch, with a little flag. */
+function drawRealDoor(ctx, ex, ey, t) {
+  const x = ex * CELL, y = ey * CELL;
+  const arch = ctx.createLinearGradient(x, 0, x + CELL, 0);
+  arch.addColorStop(0, '#5e5b57'); arch.addColorStop(0.5, '#9a958e'); arch.addColorStop(1, '#55524e');
+  ctx.fillStyle = arch;
+  ctx.beginPath(); ctx.moveTo(x + 3, y + CELL); ctx.lineTo(x + 3, y + 15); ctx.arc(x + CELL / 2, y + 15, CELL / 2 - 3, Math.PI, 0); ctx.lineTo(x + CELL - 3, y + CELL); ctx.fill();
+  ctx.strokeStyle = 'rgba(40,38,36,0.6)'; ctx.lineWidth = 1;
+  for (const a of [-2.6, -1.9, -1.2, -0.5]) { ctx.beginPath(); ctx.moveTo(x + CELL / 2 + Math.cos(a) * 9, y + 15 + Math.sin(a) * 9); ctx.lineTo(x + CELL / 2 + Math.cos(a) * 17, y + 15 + Math.sin(a) * 17); ctx.stroke(); }
+  const wood = ctx.createLinearGradient(x, 0, x + CELL, 0);
+  wood.addColorStop(0, '#4a2e1a'); wood.addColorStop(0.5, '#8a5a34'); wood.addColorStop(1, '#3e2614');
+  ctx.fillStyle = wood;
+  ctx.beginPath(); ctx.moveTo(x + 8, y + CELL); ctx.lineTo(x + 8, y + 16); ctx.arc(x + CELL / 2, y + 16, CELL / 2 - 8, Math.PI, 0); ctx.lineTo(x + CELL - 8, y + CELL); ctx.fill();
+  ctx.strokeStyle = 'rgba(25,14,8,0.6)';
+  for (const k of [15, 20, 25]) { ctx.beginPath(); ctx.moveTo(x + k, y + 9); ctx.lineTo(x + k, y + CELL); ctx.stroke(); }
+  ctx.fillStyle = '#3a3a3e'; ctx.fillRect(x + 9, y + 20, 22, 2.5); ctx.fillRect(x + 9, y + 32, 22, 2.5);
+  ctx.fillStyle = '#e1b84a'; ctx.beginPath(); ctx.arc(x + CELL - 13, y + 27, 2.2, 0, Math.PI * 2); ctx.fill();
+  // The flag on top, flapping.
+  ctx.strokeStyle = '#3a3a3e'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + CELL / 2, y - 1); ctx.lineTo(x + CELL / 2, y - 16); ctx.stroke();
+  const f = Math.sin(t * 5) * 2;
+  ctx.fillStyle = '#e8484f'; ctx.beginPath(); ctx.moveTo(x + CELL / 2, y - 16); ctx.quadraticCurveTo(x + CELL / 2 + 7, y - 15 + f, x + CELL / 2 + 13, y - 12); ctx.lineTo(x + CELL / 2, y - 8); ctx.fill();
+}
+
+/** A gold star with a shine sweeping across it. */
+function drawGoldStar(ctx, cx, cy, r, t) {
+  const g = ctx.createRadialGradient(cx - r * 0.25, cy - r * 0.3, r * 0.1, cx, cy, r);
+  g.addColorStop(0, '#fff7cc'); g.addColorStop(0.4, '#f5c535'); g.addColorStop(1, '#a8740c');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, rr = k % 2 ? r * 0.43 : r; ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,80,10,0.6)'; ctx.lineWidth = 1; ctx.stroke();
+  const s = (t * 0.8) % 3; // a glint now and then
+  if (s < 0.6) { ctx.fillStyle = `rgba(255,255,255,${0.8 * Math.sin((s / 0.6) * Math.PI)})`; ctx.beginPath(); ctx.arc(cx - r * 0.3, cy - r * 0.35, r * 0.18, 0, Math.PI * 2); ctx.fill(); }
 }
 
 function drawDoor(ctx, ex, ey, t) {
@@ -1039,6 +1086,7 @@ function sceneryMotion(ctx, g, t) {
 const sceneryCache = {};
 /** The scenery behind the board, painted once (at double resolution, for sharp phone screens). */
 export function scenery(theme) {
+  if (REAL) return realBackground(theme);
   if (!sceneryCache[theme] && typeof document !== 'undefined') {
     const cv = document.createElement('canvas');
     cv.width = 960; cv.height = 1440; // painted in 400 × 600 units (a 2 : 3 board), sharp up to 2.4× that
@@ -1059,7 +1107,9 @@ export function drawBoard(ctx, g, t, colors, fx) {
     ctx.drawImage(bg, 0, 0, g.w * CELL, g.vh * CELL);
     // A soft veil over the scenery so the blocks, rock and Poko stand out in front of it.
     ctx.fillStyle = HAZE[g.theme];
+    if (REAL) ctx.globalAlpha = 0.55; // the realistic scenery is already soft and hazy
     ctx.fillRect(0, 0, g.w * CELL, g.vh * CELL);
+    ctx.globalAlpha = 1;
     sceneryMotion(ctx, g, t);
   } else {
     const sky = ctx.createLinearGradient(0, 0, 0, g.vh * CELL);
@@ -1078,18 +1128,24 @@ export function drawBoard(ctx, g, t, colors, fx) {
   ctx.save();
   ctx.translate(0, -cam * CELL);
 
+  // The rock: in the realistic look, one picture of the whole stage's rock (painted once).
+  const real = REAL && g.theme && typeof document !== 'undefined';
+  if (real) {
+    ctx.drawImage(realTerrain(g), 0, 0, g.w * CELL, g.h * CELL);
+  }
   for (let y = Math.max(0, Math.floor(cam)); y < Math.min(g.h, Math.ceil(cam) + g.vh + 1); y++) {
     for (let x = 0; x < g.w; x++) {
       const c = at(g, x, y);
-      if (c === ROCK) drawRock(ctx, g, x, y, colors);
+      if (c === ROCK) { if (!real) drawRock(ctx, g, x, y, colors); }
       else if (c === BLOCK) drawBlock(ctx, x * CELL, y * CELL, BLOCK_COLORS[g.colors[y * g.w + x]]);
     }
   }
-  drawDoor(ctx, g.exit.x, g.exit.y, t);
+  if (real) drawRealDoor(ctx, g.exit.x, g.exit.y, t); else drawDoor(ctx, g.exit.x, g.exit.y, t);
   for (const s of g.stars) {
     if (s.got) continue;
     const pulse = 1 + Math.sin(t * 4 + s.x) * 0.08;
-    drawStar(ctx, s.x * CELL + CELL / 2, s.y * CELL + CELL / 2 + Math.sin(t * 3 + s.y) * 2, 13 * pulse);
+    const sx = s.x * CELL + CELL / 2, sy = s.y * CELL + CELL / 2 + Math.sin(t * 3 + s.y) * 2;
+    if (real) drawGoldStar(ctx, sx, sy, 13 * pulse, t + s.x); else drawStar(ctx, sx, sy, 13 * pulse);
   }
 
   // The falling piece and its landing spot.
@@ -1151,7 +1207,13 @@ export function drawBoard(ctx, g, t, colors, fx) {
     }
   } else {
     if (tripped) drawTripped(ctx, px, py, w.dir, t, TRIP - g.tripT);
-    else drawPoko(ctx, px, py - hop, w.dir, t, mood, CELL * 1.15);
+    else {
+      if (REAL && w.act !== 'fall') { // a soft shadow at his feet grounds him in the scene
+        ctx.fillStyle = 'rgba(0,0,0,0.32)';
+        ctx.beginPath(); ctx.ellipse(px, py - 1, 13, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      drawPoko(ctx, px, py - hop, w.dir, t, mood, CELL * 1.15);
+    }
   }
   if (overhead) { // a red "!" bubble popping over his head ("!!", bigger and faster when close)
     const r = close ? 15 : 12;
@@ -1264,6 +1326,21 @@ function drawMagma(ctx, g, t, danger, cam) {
     for (let x = 0; x <= BW; x += 8) ctx.lineTo(x, surf(x));
     ctx.lineTo(BW, BH);
     ctx.fill();
+    if (REAL && typeof document !== 'undefined') {
+      // Molten rock: dark crust and glowing cracks, drifting slowly, brightest at the surface.
+      const pat = ctx.createPattern(realLava(), 'repeat');
+      if (pat && pat.setTransform && typeof DOMMatrix !== 'undefined') pat.setTransform(new DOMMatrix().translate((t * 9) % 256, (top * 0.5) % 128));
+      ctx.save();
+      ctx.beginPath(); ctx.moveTo(0, BH);
+      for (let x = 0; x <= BW; x += 8) ctx.lineTo(x, surf(x));
+      ctx.lineTo(BW, BH); ctx.clip();
+      ctx.globalAlpha = 0.85; ctx.fillStyle = pat; ctx.fillRect(0, top - 6, BW, BH - top + 6);
+      ctx.globalAlpha = 1;
+      const hot = ctx.createLinearGradient(0, top, 0, top + CELL * 1.5);
+      hot.addColorStop(0, 'rgba(255,200,80,0.55)'); hot.addColorStop(1, 'rgba(255,120,30,0)');
+      ctx.fillStyle = hot; ctx.fillRect(0, top - 6, BW, CELL * 1.6);
+      ctx.restore();
+    }
     // Dark crust patches drifting across.
     ctx.fillStyle = 'rgba(90,20,10,0.35)';
     for (let k = 0; k < 4; k++) {
