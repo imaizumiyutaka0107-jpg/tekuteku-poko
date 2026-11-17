@@ -13,7 +13,10 @@ export const EMPTY = 0, ROCK = 1, BLOCK = 2;
 export const START_DELAY = 2.5; // seconds before Poko sets off
 const WALK = 0.55; // seconds per step
 const FALL = 0.12; // seconds per row while falling
-const GRAVITY = 0.85; // seconds per row for the falling piece
+// Seconds per row for the falling piece. Slowed from 0.85 after phone play-testing (more time
+// to steer with a thumb); the magma is slowed by the same ratio so stages stay as fair.
+const GRAVITY = 1.2;
+const MAGMA_SLOW = GRAVITY / 0.85; // the stages' magma speeds were worked out for 0.85
 const SOFT = 0.05; // ... while the player holds it down
 export const TRIP = 0.9; // seconds Poko lies flat after a near miss
 const NEAR_MISS = 1.0; // a piece that was nearly on his head counts as a near miss this long
@@ -58,7 +61,7 @@ export function makeGame(def, rand = Math.random) {
   const g = {
     ...st,
     walker: { ...st.walker, fromX: st.walker.x, fromY: st.walker.y, act: 'idle' },
-    waterEvery: def.water ?? 14, // seconds for the magma to rise one row
+    waterEvery: (def.water ?? 14) * MAGMA_SLOW, // seconds for the magma to rise one row
     bombs: def.bombs ?? false,
     weights: def.weights ?? WEIGHTS, // how often each piece comes (harder shapes later on)
     gentle: def.gentle ?? false, // early stages: a piece falling by itself never squashes Poko

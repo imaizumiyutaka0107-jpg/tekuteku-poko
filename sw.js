@@ -1,5 +1,5 @@
 // Network first, cache as fallback: always fresh online, still playable offline.
-const CACHE = 'poko-path-v18';
+const CACHE = 'poko-path-v19';
 const SHELL = ['./', 'index.html', 'style.css', 'manifest.json', 'icon.svg',
   'src/main.js', 'src/game.js', 'src/stages.js', 'src/gen/v1.js', 'src/gen/v2.js', 'src/gen/weekly-v1.js', 'src/draw.js', 'src/i18n.js'];
 
