@@ -45,7 +45,7 @@ export function climbMedian(n) {
   return 10;
 }
 /** This stage's climb: around the usual one, now and then a big tower; never over 20. */
-function pickClimb(n, rand) {
+export function pickClimb(n, rand) {
   const m = climbMedian(n);
   const ri = (a, b) => a + Math.floor(rand() * (b - a + 1));
   // (one lower from stage 100, so the occasional big tower does not pull the middle up)
@@ -177,12 +177,12 @@ export function stuckAfter(def) {
   return Infinity;
 }
 /** Seconds the player gets before Poko can first get stuck (bot tests: under about 5 s is luck). */
-const FIRST_TRAP = 6;
+export const FIRST_TRAP = 6;
 
 // ----- Making stages -----
 
 /** A stage across the screen: wandering ground with holes, the door some rows up. */
-function groundStage(n, rand, want) {
+export function groundStage(n, rand, want) {
   const ri = (a, b) => a + Math.floor(rand() * (b - a + 1));
   const level = Math.min(1, (n - 6) / 40);
   const rows = Array.from({ length: H }, () => [...EMPTY_ROW]);
@@ -239,7 +239,7 @@ function groundStage(n, rand, want) {
  * Also works out that solution level by level, to check that Poko waits safely and really
  * gets up, and to time the magma.
  */
-function towerStage(n, rand, climb) {
+export function towerStage(n, rand, climb) {
   const ri = (a, b) => a + Math.floor(rand() * (b - a + 1));
   // Rise of each ledge over the last: 3s and 4s adding up to the climb.
   const ok = (r) => r === 0 || r === 3 || r === 4 || r >= 6;

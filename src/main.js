@@ -3,7 +3,7 @@
 import { W, H, waterTop, makeGame, update, move, rotate, hardDrop, setSoft, takeEvents, starsGot, crushGap } from './game.js';
 import { getStage, climbOf } from './stages.js';
 import { weekOf, weekStart, weekEnd, weeklyStage, weeklyBlocks } from './gen/weekly-v1.js';
-import { CELL, drawBoard, drawPiecePreview, drawPoko } from './draw.js';
+import { CELL, drawBoard, drawPiecePreview, drawPoko, themeOf } from './draw.js';
 import { t, detectLang, setCurrentLang, getCurrentLang, LANGS } from './i18n.js';
 
 // ---------- Saved progress and settings ----------
@@ -243,6 +243,7 @@ function playStage(spec) {
   let g, fx, time, paused, shownEnd, warned, panicking;
   function start() {
     g = makeGame(spec.def, spec.blocks?.());
+    g.theme = themeOf(n, spec.week);
     fx = [];
     time = 0;
     paused = false;

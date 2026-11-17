@@ -553,14 +553,169 @@ function pokoHead(ctx, mood, t) {
   }
 }
 
+// ----- Scenery: Poko explores a forest, then a cave, then old ruins, five stages each -----
+
+export const THEMES = ['forest', 'cave', 'ruins'];
+/** The scenery for stage n (hand-made stages 1–5 are the forest), or for a weekly challenge. */
+export const themeOf = (n, week) => (week !== undefined ? THEMES[week % 3] : THEMES[Math.floor((n - 1) / 5) % 3]);
+
+// Each place has its own rock and edge colours (the edge is grass in the forest, a pale stone
+// lip in the cave, moss on the ruins' sandstone).
+const THEME_COLORS = {
+  forest: { rock: '#7a5a40', rockDot: '#5e4430', grass: '#5cbf4a' },
+  cave: { rock: '#5d566b', rockDot: '#463f56', grass: '#a29bb8', ghost: 'rgba(255,255,255,0.6)', text: '#eef3ff' },
+  ruins: { rock: '#b48f63', rockDot: '#8f6e48', grass: '#6aa84f' },
+};
+
+/** A little seeded random, so the scenery is the same every time. */
+function seeded(seed) {
+  return () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+}
+
+function paintForest(c) {
+  const BW = W * CELL, BH = H * CELL, r = seeded(11);
+  const sky = c.createLinearGradient(0, 0, 0, BH);
+  sky.addColorStop(0, '#9fdcef'); sky.addColorStop(0.55, '#d4f1dc'); sky.addColorStop(1, '#eefbe6');
+  c.fillStyle = sky; c.fillRect(0, 0, BW, BH);
+  // Far trees: pale, round, overlapping.
+  const crowns = (base, color, size, count) => {
+    c.fillStyle = color;
+    for (let i = 0; i < count; i++) {
+      const x = (i / (count - 1)) * BW + (r() - 0.5) * 30, y = base + (r() - 0.5) * 40, s = size * (0.7 + r() * 0.6);
+      c.fillRect(x - s * 0.08, y, s * 0.16, BH - y);
+      c.beginPath(); c.arc(x, y, s * 0.55, 0, Math.PI * 2); c.arc(x - s * 0.35, y + s * 0.2, s * 0.4, 0, Math.PI * 2); c.arc(x + s * 0.35, y + s * 0.2, s * 0.42, 0, Math.PI * 2); c.fill();
+    }
+  };
+  crowns(330, 'rgba(120,180,150,0.45)', 90, 7);
+  crowns(390, 'rgba(70,140,100,0.55)', 110, 6);
+  // Sunbeams through the leaves.
+  c.fillStyle = 'rgba(255,255,220,0.18)';
+  for (const x of [60, 170, 300]) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x + 40, 0); c.lineTo(x + 140, BH); c.lineTo(x + 70, BH); c.fill(); }
+  // Leaves and vines hanging from the top.
+  c.fillStyle = '#3f8f4f';
+  for (let x = -20; x < BW + 20; x += 34) { c.beginPath(); c.ellipse(x + r() * 10, 6 + r() * 12, 30, 22, 0, 0, Math.PI * 2); c.fill(); }
+  c.strokeStyle = '#2f7a3f'; c.lineWidth = 3;
+  for (const x of [35, 140, 255, 360]) {
+    const len = 60 + r() * 90;
+    c.beginPath(); c.moveTo(x, 20); c.quadraticCurveTo(x + 12, 20 + len / 2, x - 4, 20 + len); c.stroke();
+    c.fillStyle = '#4caf50';
+    for (let k = 30; k < len; k += 22) { c.beginPath(); c.ellipse(x + 4, 20 + k, 6, 3.5, 0.6, 0, Math.PI * 2); c.fill(); }
+  }
+  // Little flowers and fireflies of light.
+  c.fillStyle = 'rgba(255,255,200,0.7)';
+  for (let i = 0; i < 14; i++) { c.beginPath(); c.arc(r() * BW, 120 + r() * 300, 1.5 + r() * 1.5, 0, Math.PI * 2); c.fill(); }
+}
+
+function paintCave(c) {
+  const BW = W * CELL, BH = H * CELL, r = seeded(23);
+  const bg = c.createLinearGradient(0, 0, 0, BH);
+  bg.addColorStop(0, '#1d1828'); bg.addColorStop(0.6, '#2f2640'); bg.addColorStop(1, '#43344f');
+  c.fillStyle = bg; c.fillRect(0, 0, BW, BH);
+  // Far cave walls: lumpy dark shapes on both sides.
+  c.fillStyle = 'rgba(15,10,24,0.55)';
+  for (const side of [0, 1]) {
+    c.beginPath(); c.moveTo(side ? BW : 0, 0);
+    for (let y = 0; y <= BH; y += 40) c.lineTo(side ? BW - (30 + r() * 50) : 30 + r() * 50, y);
+    c.lineTo(side ? BW : 0, BH); c.fill();
+  }
+  // Rock columns in the distance.
+  c.fillStyle = 'rgba(80,66,100,0.5)';
+  for (const x of [110, 270]) { c.beginPath(); c.moveTo(x - 18, BH); c.lineTo(x - 8, 0); c.lineTo(x + 10, 0); c.lineTo(x + 22, BH); c.fill(); }
+  // Stalactites.
+  c.fillStyle = '#15111e';
+  c.fillRect(0, 0, BW, 10);
+  for (let x = 0; x < BW; x += 18 + r() * 18) {
+    const len = 20 + r() * 70, w = 10 + r() * 14;
+    c.beginPath(); c.moveTo(x - w / 2, 8); c.lineTo(x, 8 + len); c.lineTo(x + w / 2, 8); c.fill();
+  }
+  // Glowing crystals.
+  const crystal = (x, y, s, hue) => {
+    const glow = c.createRadialGradient(x, y, 0, x, y, s * 3);
+    glow.addColorStop(0, `hsla(${hue},90%,70%,0.45)`); glow.addColorStop(1, `hsla(${hue},90%,70%,0)`);
+    c.fillStyle = glow; c.beginPath(); c.arc(x, y, s * 3, 0, Math.PI * 2); c.fill();
+    c.fillStyle = `hsl(${hue},80%,72%)`;
+    for (const [dx, h, a] of [[0, s * 1.6, 0], [-s * 0.6, s, -0.4], [s * 0.6, s * 1.1, 0.4]]) {
+      c.save(); c.translate(x + dx, y + s * 0.4); c.rotate(a);
+      c.beginPath(); c.moveTo(-s * 0.3, 0); c.lineTo(0, -h); c.lineTo(s * 0.3, 0); c.fill(); c.restore();
+    }
+  };
+  crystal(40, 160, 9, 190); crystal(355, 120, 8, 280); crystal(300, 330, 10, 190); crystal(70, 400, 7, 300); crystal(200, 70, 6, 200);
+  // Specks of light drifting in the dark.
+  c.fillStyle = 'rgba(190,230,255,0.5)';
+  for (let i = 0; i < 24; i++) { c.beginPath(); c.arc(r() * BW, 40 + r() * 460, 0.8 + r() * 1.2, 0, Math.PI * 2); c.fill(); }
+}
+
+function paintRuins(c) {
+  const BW = W * CELL, BH = H * CELL, r = seeded(37);
+  const sky = c.createLinearGradient(0, 0, 0, BH);
+  sky.addColorStop(0, '#f2a46f'); sky.addColorStop(0.5, '#ffd39a'); sky.addColorStop(1, '#fff0cf');
+  c.fillStyle = sky; c.fillRect(0, 0, BW, BH);
+  // The sun, low.
+  const sun = c.createRadialGradient(290, 230, 0, 290, 230, 90);
+  sun.addColorStop(0, 'rgba(255,250,220,0.95)'); sun.addColorStop(0.35, 'rgba(255,235,170,0.6)'); sun.addColorStop(1, 'rgba(255,220,150,0)');
+  c.fillStyle = sun; c.beginPath(); c.arc(290, 230, 90, 0, Math.PI * 2); c.fill();
+  // A stepped temple far away.
+  c.fillStyle = 'rgba(170,110,80,0.35)';
+  for (let k = 0; k < 6; k++) c.fillRect(170 - k * 22 + 0, 300 + k * 22, 120 + k * 44, 24);
+  c.fillRect(205, 270, 50, 32);
+  // Broken columns and an arch.
+  const column = (x, base, h, broken) => {
+    c.fillStyle = 'rgba(150,105,75,0.55)';
+    c.fillRect(x - 13, base - h, 26, h);
+    c.fillRect(x - 18, base - 10, 36, 10);
+    if (!broken) c.fillRect(x - 18, base - h - 9, 36, 10);
+    else { c.beginPath(); c.moveTo(x - 13, base - h); c.lineTo(x - 4, base - h - 12); c.lineTo(x + 4, base - h - 3); c.lineTo(x + 13, base - h - 9); c.lineTo(x + 13, base - h); c.fill(); }
+    c.fillStyle = 'rgba(120,80,55,0.35)';
+    for (let k = -8; k <= 8; k += 8) c.fillRect(x + k - 1, base - h + 4, 2, h - 14);
+  };
+  column(40, 520, 230, true); column(120, 520, 160, false); column(355, 520, 260, false); column(300, 520, 120, true);
+  c.strokeStyle = 'rgba(150,105,75,0.55)'; c.lineWidth = 16;
+  c.beginPath(); c.arc(80, 362, 40, Math.PI, 0); c.stroke();
+  // Vines and leaves on the stones, and from the top.
+  c.strokeStyle = '#4f8f3a'; c.lineWidth = 2.5;
+  for (const [x, y0, len] of [[355, 255, 120], [42, 290, 90], [120, 360, 60], [180, 0, 70], [250, 0, 110]]) {
+    c.beginPath(); c.moveTo(x, y0); c.bezierCurveTo(x + 10, y0 + len / 3, x - 10, y0 + (2 * len) / 3, x + 3, y0 + len); c.stroke();
+    c.fillStyle = '#5fa046';
+    for (let k = 10; k < len; k += 16) { c.beginPath(); c.ellipse(x + (k % 32 ? 5 : -5), y0 + k, 5, 3, k % 32 ? 0.5 : -0.5, 0, Math.PI * 2); c.fill(); }
+  }
+  // Birds.
+  c.strokeStyle = 'rgba(90,60,50,0.55)'; c.lineWidth = 2;
+  for (let i = 0; i < 4; i++) { const x = 40 + r() * 300, y = 50 + r() * 120; c.beginPath(); c.moveTo(x - 7, y); c.quadraticCurveTo(x - 3, y - 5, x, y); c.quadraticCurveTo(x + 3, y - 5, x + 7, y); c.stroke(); }
+}
+
+const PAINT = { forest: paintForest, cave: paintCave, ruins: paintRuins };
+const sceneryCache = {};
+/** The scenery behind the board, painted once (at double resolution, for sharp phone screens). */
+function scenery(theme) {
+  if (!sceneryCache[theme] && typeof document !== 'undefined') {
+    const cv = document.createElement('canvas');
+    cv.width = W * CELL * 2; cv.height = H * CELL * 2;
+    const c = cv.getContext('2d');
+    c.scale(2, 2);
+    PAINT[theme](c);
+    sceneryCache[theme] = cv;
+  }
+  return sceneryCache[theme];
+}
+
 /** The whole board. `fx` holds short-lived effects (booms, sparkles) from main.js. */
 export function drawBoard(ctx, g, t, colors, fx) {
-  // Sky.
-  const sky = ctx.createLinearGradient(0, 0, 0, H * CELL);
-  sky.addColorStop(0, colors.skyTop);
-  sky.addColorStop(1, colors.skyBottom);
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W * CELL, H * CELL);
+  // Scenery (forest, cave or ruins), or plain sky.
+  const bg = g.theme && PAINT[g.theme] ? scenery(g.theme) : null;
+  if (bg) {
+    colors = { ...colors, ...THEME_COLORS[g.theme] };
+    ctx.drawImage(bg, 0, 0, W * CELL, H * CELL);
+    if (g.theme === 'cave') { // crystals breathing
+      ctx.fillStyle = `rgba(150,220,255,${0.04 + Math.sin(t * 1.5) * 0.03})`;
+      ctx.fillRect(0, 0, W * CELL, H * CELL);
+    }
+  } else {
+    const sky = ctx.createLinearGradient(0, 0, 0, H * CELL);
+    sky.addColorStop(0, colors.skyTop);
+    sky.addColorStop(1, colors.skyBottom);
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W * CELL, H * CELL);
+  }
 
   // The view glides after Poko on stages taller than the screen.
   const target = viewTop(g);

@@ -7,14 +7,17 @@
 // later). The magma's speed is then worked out from the work each stage takes, so every stage
 // is fair.
 import * as v1 from './gen/v1.js';
+import * as v2 from './gen/v2.js';
 
 const EMPTY_ROW = '..........';
 const top = (n) => Array(n).fill(EMPTY_ROW);
 
 const HAND_MAPS = [
-  // 1. Fill the hole.
-  { gentle: true, rows: [...top(11),
-    'R.*....*.E',
+  // 1. Fill the hole. (The door sits up a little rock stair Poko climbs by himself.)
+  { gentle: true, rows: [...top(9),
+    '.........E',
+    '........##',
+    'R.*..*.###',
     '####..####',
     '####*.####',
     '##########'] },
@@ -38,17 +41,19 @@ const HAND_MAPS = [
     '##########',
     '##########'] },
   // 4. Poko heads the wrong way: stop him or fill the hole.
-  { rows: [...top(11),
-    '..*...L.*E',
+  { rows: [...top(9),
+    '........*E',
+    '........##',
+    '..*...L###',
     '#...######',
     '#*..######',
     '##########'] },
   // 5. Bombs clear blocks (never rock).
   { bombs: true, first: ['bomb'], rows: [...top(9),
     '....*.....',
-    '....BB....',
-    '....BB....',
-    'R.*.BB.*.E',
+    '....BB...E',
+    '....BB..##',
+    'R.*.BB*###',
     '##########',
     '##########'] },
 ];
@@ -61,7 +66,11 @@ export const { shapeHardness, pieceWeights, climbMedian, climbOf, walksHome, pla
  * maker (gen/v2.js, ...) only ever takes over from a stage number nobody has reached yet:
  * add { from: <that number>, make: v2.generate } at the end.
  */
-const ERAS = [{ from: 6, make: v1.generate }];
+//
+// v2 replaced v1 for every stage on 17 Nov 2026, one day after the game first went public
+// (doors raised after phone play-testing); the fingerprints were recorded again then. From now
+// on, only add eras.
+const ERAS = [{ from: 6, make: v2.generate }];
 
 /** Stage n (6 and up), made from its number by the maker of its era. */
 export function generateStage(n) {
