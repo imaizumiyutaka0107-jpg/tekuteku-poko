@@ -1,6 +1,7 @@
 // Poko's Path: the screens (home with the stage list, and a stage being played), input and sound.
 // Plays the same with a finger (buttons or gestures on the board), a mouse, or a keyboard.
-import { W, H, waterTop, makeGame, update, move, rotate, hardDrop, setSoft, takeEvents, starsGot, crushGap } from './game.js';
+import { W, H, waterTop, makeGame, update, move, rotate, hardDrop, setSoft, takeEvents, starsGot, crushGap, canRevive, revive } from './game.js';
+import { rewardedReady, showRewarded } from './ads.js';
 import { getStage, climbOf } from './stages.js';
 import { weekOf, weekStart, weekEnd, weeklyStage, weeklyBlocks } from './gen/weekly.js';
 import { CELL, drawBoard, drawPiecePreview, drawPoko, themeOf, scenery } from './draw.js';
@@ -37,6 +38,30 @@ const totalStars = () => Object.values(bestStars()).reduce((a, b) => a + b, 0);
 setCurrentLang(detectLang(load().lang));
 document.documentElement.lang = getCurrentLang();
 const app = document.getElementById('app');
+
+// ---------- Running as the phone app (Capacitor) or in a browser ----------
+const NATIVE = !!window.Capacitor?.isNativePlatform?.();
+const plugin = (name) => window.Capacitor?.Plugins?.[name];
+// Browsers refuse to vibrate before the player has touched the page.
+let touched = false;
+for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => { touched = true; }, { once: true, capture: true });
+/** A buzz: a number of ms, or a pattern [on, off, on, ...]. The app uses the phone's own motor. */
+function buzz(pattern) {
+  if (NATIVE) {
+    const h = plugin('Haptics');
+    if (!h) return;
+    const on = Array.isArray(pattern) ? pattern.filter((_, i) => i % 2 === 0).reduce((a, b) => a + b, 0) : pattern;
+    if (on <= 12) h.impact?.({ style: 'LIGHT' }).catch?.(() => {});
+    else h.vibrate?.({ duration: on }).catch?.(() => {});
+  } else if (touched) navigator.vibrate?.(pattern);
+}
+if (NATIVE) {
+  // Android's back button: from a stage back to the stage list; from the list, close the app.
+  plugin('App')?.addListener?.('backButton', () => {
+    if (location.hash && location.hash !== '#/' && location.hash !== '#') location.hash = '#/';
+    else plugin('App').exitApp?.();
+  });
+}
 
 // ---------- Sound: tiny synthesized tones, no files ----------
 let audio = null;
@@ -450,9 +475,25 @@ function playStage(spec) {
         <button class="ghost retry">${t('retry')}</button>
         <a class="ghost" href="#/">${t('stages')}</a>`;
     } else {
+      // Once per try: watch a video to carry on from here (only when an ad is available).
+      const offer = canRevive(g) && rewardedReady();
       el.innerHTML = `<p class="over-title">${t(g.reason === 'water' ? 'lostWater' : g.reason === 'crushed' ? 'lostCrushed' : 'lostFull')}</p>
-        <button class="primary retry">${t('retry')}</button>
+        ${offer ? `<button class="primary revive">▶ ${t('reviveAd')}</button>` : ''}
+        <button class="${offer ? 'ghost' : 'primary'} retry">${t('retry')}</button>
         <a class="ghost" href="#/">${t('stages')}</a>`;
+      const rb = el.querySelector('.revive');
+      if (rb) rb.onclick = async () => {
+        rb.disabled = true;
+        const ok = await showRewarded();
+        if (ok && revive(g)) {
+          el.hidden = true;
+          shownEnd = false;
+          endDelay = 0;
+          paused = false;
+          last = performance.now();
+          acc = 0;
+        } else rb.disabled = false;
+      };
     }
     el.hidden = false;
     el.querySelector('.retry').onclick = start;
@@ -504,10 +545,10 @@ function playStage(spec) {
       for (const e of takeEvents(g)) {
         const type = typeof e === 'string' ? e : e.type;
         SOUNDS[type]?.();
-        if (type === 'lock') navigator.vibrate?.(8);
-        if (type === 'trip') navigator.vibrate?.([25, 30, 50]);
-        if (type === 'lost' && g.reason === 'crushed') { SOUNDS.boom(); navigator.vibrate?.([40, 40, 40]); }
-        if (type === 'boom') { fx.push({ type: 'boom', x: e.x, y: e.y, age: 0, life: 0.35 }); navigator.vibrate?.([20, 30, 20]); }
+        if (type === 'lock') buzz(8);
+        if (type === 'trip') buzz([25, 30, 50]);
+        if (type === 'lost' && g.reason === 'crushed') { SOUNDS.boom(); buzz([40, 40, 40]); }
+        if (type === 'boom') { fx.push({ type: 'boom', x: e.x, y: e.y, age: 0, life: 0.35 }); buzz([20, 30, 20]); }
         if (type === 'star') {
           renderStars();
           for (let k = 0; k < 8; k++) {
@@ -518,10 +559,10 @@ function playStage(spec) {
         if (type === 'won' || type === 'lost') endDelay = type === 'won' ? 1.1 : 0.9;
       }
       // A warning buzz once when the water nears Poko.
-      if (g.status === 'play' && !warned && waterTop(g) < g.walker.y + 2.2) { warned = true; navigator.vibrate?.([30, 60, 30]); }
+      if (g.status === 'play' && !warned && waterTop(g) < g.walker.y + 2.2) { warned = true; buzz([30, 60, 30]); }
       // Once each time a block starts coming down on Poko: an "uh-oh" and a little buzz.
       const nowPanic = crushGap(g) >= 0;
-      if (nowPanic && !panicking) { SOUNDS.panic(); navigator.vibrate?.([15, 40, 15]); }
+      if (nowPanic && !panicking) { SOUNDS.panic(); buzz([15, 40, 15]); }
       panicking = nowPanic;
       for (const f of fx) { f.age += DT; if (f.vx !== undefined) { f.x += f.vx * DT; f.y += f.vy * DT; } }
       fx = fx.filter((f) => f.age < f.life);
@@ -573,6 +614,7 @@ async function shareText(text, btn) {
 
 route();
 
-if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+// (Not in the app: its files are on the phone already.)
+if (!NATIVE && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }

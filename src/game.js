@@ -150,6 +150,7 @@ function fall(g, byPlayer = true) {
       g.colors[y * g.w + x] = PIECE_COLOR[g.piece.kind];
     }
     g.events.push({ type: 'lock', cells: pieceCells(g.piece) });
+    g.crushCells = pieceCells(g.piece).filter(([, y]) => y >= 0); // (taken away again by revive)
     g.piece = null;
     end(g, 'lost', 'crushed');
     return false;
@@ -347,6 +348,28 @@ export function update(g, dt) {
   }
   // Poko is in trouble once the water is over his middle.
   if (g.status === 'play' && waterTop(g) < g.walker.y + 0.5) end(g, 'lost', 'water');
+}
+
+/** Can this lost game be carried on (once: after the magma or a block got Poko)? */
+export const canRevive = (g) => g.status === 'lost' && !g.revived && (g.reason === 'water' || g.reason === 'crushed');
+
+/**
+ * Carry on after a loss (the reward for watching an ad): the block that squashed Poko is
+ * lifted off him, or the magma sinks to a few rows below his feet. Only once per try.
+ */
+export function revive(g) {
+  if (!canRevive(g)) return false;
+  if (g.reason === 'crushed') for (const [x, y] of g.crushCells || []) g.grid[y * g.w + x] = EMPTY;
+  else g.water = Math.max(0.6, g.h - (g.walker.y + 1) - 3);
+  g.crushCells = null;
+  g.status = 'play';
+  g.reason = null;
+  g.revived = true;
+  g.nearT = 0;
+  g.walker.fromX = g.walker.x; g.walker.fromY = g.walker.y; g.walker.act = 'idle';
+  g.walkT = 0;
+  spawn(g);
+  return true;
 }
 
 export function takeEvents(g) { return g.events.splice(0); }
