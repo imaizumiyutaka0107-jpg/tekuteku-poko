@@ -553,18 +553,28 @@ function pokoHead(ctx, mood, t) {
   }
 }
 
-// ----- Scenery: Poko explores a forest, then a cave, then old ruins, five stages each -----
+// ----- Scenery: Poko's journey, five stages in each place, then round again -----
 
-export const THEMES = ['forest', 'cave', 'ruins'];
+export const THEMES = ['forest', 'cave', 'ruins', 'desert', 'snow', 'volcano'];
 /** The scenery for stage n (hand-made stages 1–5 are the forest), or for a weekly challenge. */
-export const themeOf = (n, week) => (week !== undefined ? THEMES[week % 3] : THEMES[Math.floor((n - 1) / 5) % 3]);
+export const themeOf = (n, week) => (week !== undefined ? THEMES[week % THEMES.length] : THEMES[Math.floor((n - 1) / 5) % THEMES.length]);
 
 // Each place has its own rock and edge colours (the edge is grass in the forest, a pale stone
-// lip in the cave, moss on the ruins' sandstone).
+// lip in the cave, moss on the ruins' sandstone, sand in the desert, snow on the mountain,
+// glowing cracks on the volcano's dark rock).
+// The veil over each place's scenery (light on bright places, dark in the cave and volcano).
+const HAZE = {
+  forest: 'rgba(236,248,240,0.38)', cave: 'rgba(16,12,26,0.32)', ruins: 'rgba(255,242,220,0.36)',
+  desert: 'rgba(255,246,228,0.36)', snow: 'rgba(242,247,255,0.34)', volcano: 'rgba(24,10,12,0.32)',
+};
+
 const THEME_COLORS = {
   forest: { rock: '#7a5a40', rockDot: '#5e4430', grass: '#5cbf4a' },
   cave: { rock: '#5d566b', rockDot: '#463f56', grass: '#a29bb8', ghost: 'rgba(255,255,255,0.6)', text: '#eef3ff' },
   ruins: { rock: '#b48f63', rockDot: '#8f6e48', grass: '#6aa84f' },
+  desert: { rock: '#c8925a', rockDot: '#a8743f', grass: '#f1d394' },
+  snow: { rock: '#4b5874', rockDot: '#3a4560', grass: '#f6faff' },
+  volcano: { rock: '#4a3a3c', rockDot: '#33282a', grass: '#d8642f', ghost: 'rgba(255,255,255,0.65)', text: '#fff1e6' },
 };
 
 /** A little seeded random, so the scenery is the same every time. */
@@ -683,7 +693,349 @@ function paintRuins(c) {
   for (let i = 0; i < 4; i++) { const x = 40 + r() * 300, y = 50 + r() * 120; c.beginPath(); c.moveTo(x - 7, y); c.quadraticCurveTo(x - 3, y - 5, x, y); c.quadraticCurveTo(x + 3, y - 5, x + 7, y); c.stroke(); }
 }
 
-const PAINT = { forest: paintForest, cave: paintCave, ruins: paintRuins };
+function paintDesert(c) {
+  const BW = 400, BH = 600, r = seeded(51);
+  const sky = c.createLinearGradient(0, 0, 0, BH);
+  sky.addColorStop(0, '#7cc8f0'); sky.addColorStop(0.55, '#bfe6f3'); sky.addColorStop(1, '#ffe6b0');
+  c.fillStyle = sky; c.fillRect(0, 0, BW, BH);
+  // A hot white sun, high up.
+  const sun = c.createRadialGradient(320, 90, 0, 320, 90, 110);
+  sun.addColorStop(0, 'rgba(255,255,240,1)'); sun.addColorStop(0.2, 'rgba(255,250,210,0.85)'); sun.addColorStop(1, 'rgba(255,240,190,0)');
+  c.fillStyle = sun; c.beginPath(); c.arc(320, 90, 110, 0, Math.PI * 2); c.fill();
+  // Flat-topped mesas far away.
+  c.fillStyle = 'rgba(205,140,95,0.45)';
+  for (const [x, w, h] of [[30, 90, 120], [150, 60, 80], [280, 110, 140]]) {
+    c.beginPath(); c.moveTo(x - 20, 420); c.lineTo(x, 420 - h); c.lineTo(x + w, 420 - h); c.lineTo(x + w + 20, 420); c.fill();
+    c.fillStyle = 'rgba(185,115,75,0.35)'; c.fillRect(x, 420 - h, w, 8); c.fillStyle = 'rgba(205,140,95,0.45)';
+  }
+  // Rolling dunes, far to near.
+  const dune = (base, amp, color, phase) => {
+    c.fillStyle = color; c.beginPath(); c.moveTo(0, BH);
+    for (let x = 0; x <= BW; x += 10) c.lineTo(x, base + Math.sin(x / 70 + phase) * amp + Math.sin(x / 31 + phase * 2) * amp * 0.3);
+    c.lineTo(BW, BH); c.fill();
+  };
+  dune(400, 18, 'rgba(240,200,140,0.75)', 0.5);
+  dune(450, 22, 'rgba(232,184,118,0.85)', 2.1);
+  // Cacti.
+  const cactus = (x, base, h) => {
+    c.fillStyle = 'rgba(70,140,90,0.75)';
+    c.beginPath(); c.roundRect ? c.roundRect(x - 7, base - h, 14, h, 7) : c.rect(x - 7, base - h, 14, h); c.fill();
+    c.beginPath(); c.roundRect ? c.roundRect(x - 22, base - h * 0.7, 9, h * 0.35, 5) : c.rect(x - 22, base - h * 0.7, 9, h * 0.35); c.fill();
+    c.fillRect(x - 22, base - h * 0.42, 16, 8);
+    c.beginPath(); c.roundRect ? c.roundRect(x + 13, base - h * 0.8, 9, h * 0.4, 5) : c.rect(x + 13, base - h * 0.8, 9, h * 0.4); c.fill();
+    c.fillRect(x + 6, base - h * 0.47, 16, 8);
+  };
+  cactus(70, 440, 70); cactus(330, 455, 90); cactus(205, 430, 45);
+  // Heat shimmer and a pair of vultures.
+  c.strokeStyle = 'rgba(255,255,255,0.14)'; c.lineWidth = 1.2;
+  for (let i = 0; i < 2; i++) { const y = 395 + i * 16; c.beginPath(); for (let x = 0; x <= BW; x += 8) c.lineTo(x, y + Math.sin(x / 12 + i) * 1.5); c.stroke(); }
+  c.strokeStyle = 'rgba(80,50,40,0.5)'; c.lineWidth = 2;
+  for (let i = 0; i < 2; i++) { const x = 90 + r() * 200, y = 150 + r() * 80; c.beginPath(); c.moveTo(x - 9, y); c.quadraticCurveTo(x - 4, y - 6, x, y); c.quadraticCurveTo(x + 4, y - 6, x + 9, y); c.stroke(); }
+}
+
+function paintSnow(c) {
+  const BW = 400, BH = 600, r = seeded(67);
+  const sky = c.createLinearGradient(0, 0, 0, BH);
+  sky.addColorStop(0, '#9cc7ec'); sky.addColorStop(0.6, '#d9ecfb'); sky.addColorStop(1, '#f3f8ff');
+  c.fillStyle = sky; c.fillRect(0, 0, BW, BH);
+  // Big mountains with snowy tops, two layers.
+  const peaks = (pts, base, rock, snowLine) => {
+    c.fillStyle = rock; c.beginPath(); c.moveTo(0, base);
+    for (const [x, y] of pts) c.lineTo(x, y);
+    c.lineTo(BW, base); c.lineTo(BW, BH); c.lineTo(0, BH); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.92)';
+    for (let i = 1; i < pts.length - 1; i++) {
+      const [x, y] = pts[i], [px, py] = pts[i - 1], [nx, ny] = pts[i + 1];
+      if (y > pts[i - 1][1] || y > pts[i + 1][1]) continue; // only the peaks
+      const k = snowLine;
+      c.beginPath(); c.moveTo(x, y);
+      c.lineTo(x + (px - x) * k, y + (py - y) * k);
+      c.lineTo(x + (px - x) * k * 0.6 + 6, y + (py - y) * k * 0.8);
+      c.lineTo(x, y + (py - y) * k * 0.55 + 8);
+      c.lineTo(x + (nx - x) * k * 0.6 - 4, y + (ny - y) * k * 0.85);
+      c.lineTo(x + (nx - x) * k, y + (ny - y) * k);
+      c.fill();
+    }
+  };
+  peaks([[0, 330], [70, 210], [140, 300], [230, 150], [320, 280], [400, 200]], 360, 'rgba(140,160,195,0.6)', 0.35);
+  peaks([[0, 420], [90, 300], [170, 390], [260, 280], [360, 400], [400, 360]], 440, 'rgba(150,170,205,0.6)', 0.3);
+  // Snowy pine trees.
+  const pine = (x, base, h) => {
+    c.fillStyle = 'rgba(40,85,80,0.8)';
+    for (let k = 0; k < 3; k++) { const w = h * (0.5 - k * 0.12), y = base - k * h * 0.28; c.beginPath(); c.moveTo(x - w, y); c.lineTo(x, y - h * 0.42); c.lineTo(x + w, y); c.fill(); }
+    c.fillStyle = 'rgba(255,255,255,0.9)';
+    for (let k = 0; k < 3; k++) { const w = h * (0.5 - k * 0.12), y = base - k * h * 0.28; c.beginPath(); c.moveTo(x - w * 0.55, y - h * 0.2); c.lineTo(x, y - h * 0.42); c.lineTo(x + w * 0.55, y - h * 0.2); c.fill(); }
+  };
+  pine(40, 470, 70); pine(95, 480, 55); pine(300, 475, 80); pine(365, 470, 60);
+  // Snow drifts at the bottom and snow in the air.
+  c.fillStyle = 'rgba(255,255,255,0.35)'; c.beginPath(); c.moveTo(0, BH);
+  for (let x = 0; x <= BW; x += 10) c.lineTo(x, 480 + Math.sin(x / 50) * 10);
+  c.lineTo(BW, BH); c.fill();
+  c.fillStyle = 'rgba(255,255,255,0.8)';
+  for (let i = 0; i < 50; i++) { c.beginPath(); c.arc(r() * BW, r() * 460, 1 + r() * 2, 0, Math.PI * 2); c.fill(); }
+}
+
+function paintVolcano(c) {
+  const BW = 400, BH = 600, r = seeded(83);
+  const sky = c.createLinearGradient(0, 0, 0, BH);
+  sky.addColorStop(0, '#2a1218'); sky.addColorStop(0.5, '#5c1f1a'); sky.addColorStop(1, '#a3401c');
+  c.fillStyle = sky; c.fillRect(0, 0, BW, BH);
+  // Ash clouds.
+  c.fillStyle = 'rgba(40,25,30,0.55)';
+  for (const [x, y, s] of [[60, 60, 50], [130, 40, 60], [250, 70, 55], [340, 45, 60], [190, 100, 40]]) { c.beginPath(); c.arc(x, y, s, 0, Math.PI * 2); c.fill(); }
+  // The volcano, glowing at the top, a plume of smoke and lava running down.
+  const glow = c.createRadialGradient(200, 230, 0, 200, 230, 140);
+  glow.addColorStop(0, 'rgba(255,170,60,0.7)'); glow.addColorStop(1, 'rgba(255,90,30,0)');
+  c.fillStyle = glow; c.beginPath(); c.arc(200, 230, 140, 0, Math.PI * 2); c.fill();
+  c.fillStyle = 'rgba(30,18,20,0.85)';
+  c.beginPath(); c.moveTo(-20, 470); c.lineTo(165, 235); c.lineTo(235, 235); c.lineTo(420, 470); c.lineTo(420, BH); c.lineTo(-20, BH); c.fill();
+  c.strokeStyle = 'rgba(255,120,40,0.85)'; c.lineWidth = 5; c.lineCap = 'round';
+  for (const [x0, bend, x1] of [[185, 150, 120], [215, 250, 280], [200, 205, 215]]) {
+    c.beginPath(); c.moveTo(x0, 240); c.quadraticCurveTo(bend, 330, x1, 440); c.stroke();
+  }
+  c.fillStyle = 'rgba(255,190,80,0.95)'; c.beginPath(); c.ellipse(200, 236, 36, 7, 0, 0, Math.PI * 2); c.fill();
+  c.fillStyle = 'rgba(70,50,55,0.6)';
+  for (let k = 0; k < 7; k++) { c.beginPath(); c.arc(200 + Math.sin(k) * 18 + k * 6, 200 - k * 26, 22 + k * 5, 0, Math.PI * 2); c.fill(); }
+  // Embers in the air.
+  for (let i = 0; i < 30; i++) {
+    c.fillStyle = `rgba(255,${150 + Math.floor(r() * 80)},60,${0.5 + r() * 0.5})`;
+    c.beginPath(); c.arc(r() * BW, 120 + r() * 380, 1 + r() * 1.8, 0, Math.PI * 2); c.fill();
+  }
+}
+
+// ----- More detail on each place (painted once, over the base picture) -----
+
+const blob = (c, x, y, rx, ry, color) => { c.fillStyle = color; c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); c.fill(); };
+function cloud(c, x, y, s, color) {
+  c.fillStyle = color; c.beginPath();
+  c.ellipse(x, y, 34 * s, 14 * s, 0, 0, Math.PI * 2); c.ellipse(x - 22 * s, y + 4 * s, 20 * s, 11 * s, 0, 0, Math.PI * 2);
+  c.ellipse(x + 24 * s, y + 3 * s, 22 * s, 12 * s, 0, 0, Math.PI * 2); c.ellipse(x + 4 * s, y - 10 * s, 20 * s, 14 * s, 0, 0, Math.PI * 2);
+  c.fill();
+}
+
+function forestMore(c) {
+  const r = seeded(101);
+  // Hazy hills far behind the trees.
+  c.fillStyle = 'rgba(150,200,175,0.35)'; c.beginPath(); c.moveTo(0, 360);
+  for (let x = 0; x <= 400; x += 10) c.lineTo(x, 300 + Math.sin(x / 60) * 18 + Math.sin(x / 23) * 6);
+  c.lineTo(400, 600); c.lineTo(0, 600); c.fill();
+  // A near layer of darker trunks with bark lines.
+  for (const x of [18, 128, 236, 372]) {
+    c.fillStyle = 'rgba(70,55,45,0.22)'; c.fillRect(x - 9, 250, 18, 350);
+    c.strokeStyle = 'rgba(40,30,25,0.12)'; c.lineWidth = 1.5;
+    for (let y = 270; y < 600; y += 26) { c.beginPath(); c.moveTo(x - 6, y); c.lineTo(x - 2, y + 10); c.stroke(); c.beginPath(); c.moveTo(x + 5, y + 12); c.lineTo(x + 2, y + 22); c.stroke(); }
+    blob(c, x, 245, 46, 32, 'rgba(50,120,70,0.28)'); blob(c, x - 26, 262, 30, 22, 'rgba(60,135,80,0.25)'); blob(c, x + 28, 260, 32, 22, 'rgba(45,110,65,0.25)');
+  }
+  // Ground-level things are kept faint, so nobody takes them for part of the stage.
+  c.globalAlpha = 0.25;
+  // Bushes, ferns, flowers and mushrooms along the bottom.
+  for (let x = -10; x < 420; x += 38) blob(c, x + r() * 10, 470 + r() * 12, 26 + r() * 10, 16 + r() * 6, `rgba(${60 + r() * 30},${140 + r() * 30},${70 + r() * 20},0.75)`);
+  c.strokeStyle = 'rgba(70,150,80,0.8)'; c.lineWidth = 2;
+  for (let i = 0; i < 10; i++) { const x = r() * 400, y = 470 + r() * 20; for (let k = -2; k <= 2; k++) { c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + k * 6, y - 14, x + k * 10, y - 18 - Math.abs(k) * -2); c.stroke(); } }
+  for (let i = 0; i < 14; i++) {
+    const x = r() * 400, y = 468 + r() * 26, col = ['#ff8fb1', '#ffd43b', '#ffffff', '#b197fc'][i % 4];
+    c.fillStyle = col; for (let k = 0; k < 5; k++) { const a = (k / 5) * Math.PI * 2; c.beginPath(); c.arc(x + Math.cos(a) * 3, y + Math.sin(a) * 3, 2.2, 0, Math.PI * 2); c.fill(); }
+    c.fillStyle = '#ffb703'; c.beginPath(); c.arc(x, y, 1.6, 0, Math.PI * 2); c.fill();
+  }
+  for (const [x, y, s] of [[60, 482, 1], [300, 478, 1.2], [340, 486, 0.8]]) {
+    c.fillStyle = '#f4ead5'; c.fillRect(x - 2.5 * s, y - 8 * s, 5 * s, 9 * s);
+    c.fillStyle = '#e8574a'; c.beginPath(); c.ellipse(x, y - 8 * s, 9 * s, 6 * s, 0, Math.PI, 0); c.fill();
+    c.fillStyle = '#fff'; for (const dx of [-4, 1, 4]) { c.beginPath(); c.arc(x + dx * s, y - 11 * s + Math.abs(dx) * 0.4 * s, 1.3 * s, 0, Math.PI * 2); c.fill(); }
+  }
+}
+
+function caveMore(c) {
+  const r = seeded(113);
+  // Stalactites with a pale edge, and stalagmites rising from below.
+  for (let x = 8; x < 400; x += 26 + r() * 22) {
+    const len = 30 + r() * 80, w = 12 + r() * 12;
+    c.fillStyle = '#211a2e'; c.beginPath(); c.moveTo(x - w / 2, 0); c.lineTo(x, len); c.lineTo(x + w / 2, 0); c.fill();
+    c.fillStyle = 'rgba(160,150,200,0.25)'; c.beginPath(); c.moveTo(x - w / 2 + 2, 0); c.lineTo(x - 1, len - 6); c.lineTo(x - w / 4, 0); c.fill();
+  }
+  for (let x = 20; x < 400; x += 46 + r() * 30) {
+    const h = 30 + r() * 60, w = 16 + r() * 14;
+    c.fillStyle = 'rgba(60,48,78,0.85)'; c.beginPath(); c.moveTo(x - w / 2, 600); c.lineTo(x, 470 - h); c.lineTo(x + w / 2, 600); c.fill();
+  }
+  // A thin underground waterfall catching the light.
+  const fall = c.createLinearGradient(0, 40, 0, 420);
+  fall.addColorStop(0, 'rgba(140,210,255,0.0)'); fall.addColorStop(0.3, 'rgba(140,210,255,0.35)'); fall.addColorStop(1, 'rgba(140,210,255,0.05)');
+  c.fillStyle = fall; c.fillRect(332, 40, 10, 380);
+  c.globalAlpha = 0.5;
+  // Glowing mushrooms on the ledges.
+  for (const [x, y, hue] of [[60, 455, 170], [78, 462, 190], [250, 450, 280], [268, 458, 300], [180, 470, 170]]) {
+    const gl = c.createRadialGradient(x, y - 6, 0, x, y - 6, 22);
+    gl.addColorStop(0, `hsla(${hue},90%,70%,0.45)`); gl.addColorStop(1, `hsla(${hue},90%,70%,0)`);
+    c.fillStyle = gl; c.beginPath(); c.arc(x, y - 6, 22, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#d9d2e9'; c.fillRect(x - 1.5, y - 6, 3, 8);
+    c.fillStyle = `hsl(${hue},85%,72%)`; c.beginPath(); c.ellipse(x, y - 6, 7, 4.5, 0, Math.PI, 0); c.fill();
+  }
+  // Old mine timbers in the gloom.
+  c.fillStyle = 'rgba(90,65,45,0.45)';
+  c.fillRect(150, 250, 8, 170); c.fillRect(232, 250, 8, 170); c.fillRect(142, 244, 106, 10);
+  c.fillStyle = 'rgba(255,200,120,0.6)'; c.beginPath(); c.arc(195, 270, 5, 0, Math.PI * 2); c.fill(); // a lantern
+  const lamp = c.createRadialGradient(195, 270, 0, 195, 270, 60);
+  lamp.addColorStop(0, 'rgba(255,200,120,0.3)'); lamp.addColorStop(1, 'rgba(255,200,120,0)');
+  c.fillStyle = lamp; c.beginPath(); c.arc(195, 270, 60, 0, Math.PI * 2); c.fill();
+}
+
+function ruinsMore(c) {
+  const r = seeded(127);
+  cloud(c, 80, 90, 1, 'rgba(255,240,220,0.65)'); cloud(c, 330, 140, 0.8, 'rgba(255,235,210,0.55)'); cloud(c, 200, 60, 0.6, 'rgba(255,245,230,0.5)');
+  // Temple details: steps, a dark doorway, carved bands.
+  c.fillStyle = 'rgba(140,90,65,0.35)'; c.fillRect(220, 280, 20, 22);
+  c.strokeStyle = 'rgba(120,75,55,0.35)'; c.lineWidth = 1.5;
+  for (let k = 0; k < 6; k++) { c.beginPath(); c.moveTo(170 - k * 22, 312 + k * 22); c.lineTo(290 + k * 22, 312 + k * 22); c.stroke(); }
+  for (let k = 0; k < 9; k++) { c.fillStyle = 'rgba(150,100,70,0.3)'; c.fillRect(214, 304 + k * 14, 32, 6); } // the stair up the middle
+  c.globalAlpha = 0.35;
+  // Fallen column pieces and blocks in the grass.
+  for (const [x, y, rot] of [[90, 470, 0.15], [300, 478, -0.2]]) {
+    c.save(); c.translate(x, y); c.rotate(rot);
+    c.fillStyle = 'rgba(165,120,85,0.75)'; c.fillRect(-30, -11, 60, 22);
+    c.fillStyle = 'rgba(130,90,60,0.6)'; for (let k = -24; k <= 24; k += 8) c.fillRect(k, -11, 2, 22);
+    c.fillStyle = 'rgba(185,140,100,0.8)'; c.beginPath(); c.ellipse(30, 0, 5, 11, 0, 0, Math.PI * 2); c.fill();
+    c.restore();
+  }
+  for (const [x, y] of [[200, 482], [215, 476], [360, 470]]) { c.fillStyle = 'rgba(160,115,80,0.7)'; c.fillRect(x - 9, y - 9, 18, 14); c.fillStyle = 'rgba(120,80,55,0.4)'; c.fillRect(x - 9, y + 2, 18, 3); }
+  // Grass tufts and little flowers.
+  c.strokeStyle = 'rgba(90,150,70,0.8)'; c.lineWidth = 2;
+  for (let i = 0; i < 16; i++) { const x = r() * 400, y = 480 + r() * 15; for (let k = -1; k <= 1; k++) { c.beginPath(); c.moveTo(x, y); c.lineTo(x + k * 5, y - 10 - r() * 6); c.stroke(); } }
+  // Dust in the low sunlight.
+  c.fillStyle = 'rgba(255,240,200,0.6)';
+  for (let i = 0; i < 26; i++) { c.beginPath(); c.arc(220 + r() * 170, 160 + r() * 200, 0.8 + r() * 1.2, 0, Math.PI * 2); c.fill(); }
+}
+
+function desertMore(c) {
+  const r = seeded(139);
+  cloud(c, 90, 110, 0.7, 'rgba(255,255,255,0.55)'); cloud(c, 230, 70, 0.5, 'rgba(255,255,255,0.45)');
+  // A far oasis: palms and a glint of water.
+  blob(c, 250, 392, 34, 5, 'rgba(110,190,220,0.7)');
+  for (const [x, h, lean] of [[232, 46, -0.15], [262, 38, 0.2]]) {
+    c.strokeStyle = 'rgba(120,85,55,0.8)'; c.lineWidth = 3; c.beginPath(); c.moveTo(x, 392); c.quadraticCurveTo(x + lean * 20, 392 - h / 2, x + lean * 30, 392 - h); c.stroke();
+    c.fillStyle = 'rgba(60,140,80,0.85)';
+    for (let k = 0; k < 6; k++) { const a = -Math.PI / 2 + (k - 2.5) * 0.55; c.save(); c.translate(x + lean * 30, 392 - h); c.rotate(a); c.beginPath(); c.ellipse(11, 0, 12, 3.2, 0.25, 0, Math.PI * 2); c.fill(); c.restore(); }
+  }
+  // Ripples on the dunes.
+  c.strokeStyle = 'rgba(200,150,90,0.35)'; c.lineWidth = 1.5;
+  for (let i = 0; i < 14; i++) { const x = r() * 380, y = 430 + r() * 60; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 15, y - 4, x + 30, y); c.stroke(); }
+  c.globalAlpha = 0.45;
+  // Rocks and a bleached skull of some old beast (a cartoon one).
+  for (const [x, y, s] of [[40, 480, 1], [150, 470, 0.7], [370, 485, 1.2]]) { blob(c, x, y, 14 * s, 8 * s, 'rgba(170,120,80,0.85)'); blob(c, x - 3 * s, y - 3 * s, 7 * s, 3 * s, 'rgba(220,175,120,0.6)'); }
+  c.fillStyle = 'rgba(250,240,220,0.9)'; c.beginPath(); c.ellipse(275, 480, 9, 7, 0, 0, Math.PI * 2); c.fill();
+  c.strokeStyle = 'rgba(250,240,220,0.9)'; c.lineWidth = 3; c.beginPath(); c.moveTo(268, 476); c.quadraticCurveTo(258, 466, 262, 458); c.moveTo(282, 476); c.quadraticCurveTo(292, 466, 288, 458); c.stroke();
+  c.fillStyle = 'rgba(90,60,40,0.7)'; c.beginPath(); c.arc(272, 479, 1.6, 0, Math.PI * 2); c.arc(278, 479, 1.6, 0, Math.PI * 2); c.fill();
+}
+
+function snowMore(c) {
+  const r = seeded(151);
+  cloud(c, 110, 80, 0.9, 'rgba(255,255,255,0.75)'); cloud(c, 310, 120, 0.7, 'rgba(255,255,255,0.65)');
+  // A far line of little pines on the slope.
+  for (let x = 0; x < 400; x += 12) {
+    const y = 445 + Math.sin(x / 40) * 6, h = 14 + r() * 10;
+    c.fillStyle = 'rgba(70,110,110,0.6)'; c.beginPath(); c.moveTo(x - 5, y); c.lineTo(x, y - h); c.lineTo(x + 5, y); c.fill();
+  }
+  c.globalAlpha = 0.55;
+  // A small cabin with a warm window and chimney smoke.
+  c.fillStyle = 'rgba(120,80,55,0.95)'; c.fillRect(205, 442, 40, 26);
+  c.fillStyle = 'rgba(255,255,255,0.95)'; c.beginPath(); c.moveTo(198, 444); c.lineTo(225, 424); c.lineTo(252, 444); c.fill();
+  c.fillStyle = 'rgba(255,205,110,0.95)'; c.fillRect(214, 450, 9, 8);
+  c.fillStyle = 'rgba(80,55,40,0.9)'; c.fillRect(230, 452, 9, 16); c.fillRect(238, 422, 6, 14);
+  c.fillStyle = 'rgba(230,235,245,0.6)'; for (let k = 0; k < 4; k++) { c.beginPath(); c.arc(243 + k * 5, 414 - k * 10, 4 + k * 2, 0, Math.PI * 2); c.fill(); }
+  // Sparkles on the snow.
+  c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineWidth = 1.2;
+  for (let i = 0; i < 18; i++) { const x = r() * 400, y = 470 + r() * 40, s = 2 + r() * 2.5; c.beginPath(); c.moveTo(x - s, y); c.lineTo(x + s, y); c.moveTo(x, y - s); c.lineTo(x, y + s); c.stroke(); }
+}
+
+function volcanoMore(c) {
+  const r = seeded(163);
+  // Jagged black spires on both sides (faint: they are far off, not part of the stage).
+  c.globalAlpha = 0.45;
+  c.fillStyle = 'rgba(20,12,14,0.9)';
+  for (const [x, w, h] of [[10, 40, 160], [50, 30, 110], [350, 44, 180], [390, 30, 120], [300, 26, 90]]) { c.beginPath(); c.moveTo(x - w / 2, 600); c.lineTo(x - w / 6, 470 - h); c.lineTo(x + w / 6, 470 - h + 12); c.lineTo(x + w / 2, 600); c.fill(); }
+  c.globalAlpha = 0.35;
+  // Glowing cracks on the spires and pools of lava below.
+  c.strokeStyle = 'rgba(255,110,40,0.7)'; c.lineWidth = 1.6;
+  for (const [x, y] of [[12, 380], [352, 360], [48, 420], [300, 430]]) { c.beginPath(); c.moveTo(x, y); c.lineTo(x + 4, y + 18); c.lineTo(x - 2, y + 34); c.stroke(); }
+  for (const [x, y, w] of [[110, 470, 40], [280, 476, 34]]) {
+    const pool = c.createRadialGradient(x, y, 0, x, y, w);
+    pool.addColorStop(0, 'rgba(255,220,120,0.95)'); pool.addColorStop(0.5, 'rgba(255,120,40,0.85)'); pool.addColorStop(1, 'rgba(160,40,20,0)');
+    c.fillStyle = pool; c.beginPath(); c.ellipse(x, y, w, w * 0.25, 0, 0, Math.PI * 2); c.fill();
+  }
+  // Lightning in the ash cloud.
+  c.strokeStyle = 'rgba(255,240,200,0.7)'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(300, 40); c.lineTo(288, 70); c.lineTo(300, 74); c.lineTo(284, 110); c.stroke();
+  // Falling rocks flung from the crater.
+  for (let i = 0; i < 6; i++) blob(c, 140 + r() * 120, 130 + r() * 80, 3 + r() * 2, 3 + r() * 2, 'rgba(40,25,25,0.9)');
+}
+
+const PAINT = {
+  forest: (c) => { paintForest(c); forestMore(c); c.globalAlpha = 1; },
+  cave: (c) => { paintCave(c); caveMore(c); c.globalAlpha = 1; },
+  ruins: (c) => { paintRuins(c); ruinsMore(c); c.globalAlpha = 1; },
+  desert: (c) => { paintDesert(c); desertMore(c); c.globalAlpha = 1; },
+  snow: (c) => { paintSnow(c); snowMore(c); c.globalAlpha = 1; },
+  volcano: (c) => { paintVolcano(c); volcanoMore(c); c.globalAlpha = 1; },
+};
+
+/** A little motion over the scenery: snow falling on the mountain, embers rising on the volcano. */
+function sceneryMotion(ctx, g, t) {
+  const BW = g.w * CELL, BH = g.vh * CELL;
+  if (g.theme === 'forest') {
+    // Leaves drifting down, and two butterflies.
+    for (let i = 0; i < 9; i++) {
+      const speed = 14 + (i % 3) * 5, y = (i * 83 + t * speed) % BH, x = (i * 151.3) % BW + Math.sin(t * 1.2 + i) * 18;
+      ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(t * 2 + i) * 0.9);
+      ctx.fillStyle = ['rgba(120,190,90,0.55)', 'rgba(230,180,70,0.55)', 'rgba(90,160,80,0.55)'][i % 3];
+      ctx.beginPath(); ctx.ellipse(0, 0, 5, 2.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+    for (let i = 0; i < 2; i++) {
+      const x = ((t * 22 + i * 230) % (BW + 60)) - 30, y = BH * 0.55 + Math.sin(t * 1.7 + i * 2) * 30 - i * 40;
+      const flap = Math.abs(Math.sin(t * 12 + i)) * 0.8 + 0.2;
+      ctx.fillStyle = i ? 'rgba(255,170,210,0.65)' : 'rgba(255,220,90,0.65)';
+      ctx.beginPath(); ctx.ellipse(x - 4 * flap, y, 4 * flap, 5, -0.4, 0, Math.PI * 2); ctx.ellipse(x + 4 * flap, y, 4 * flap, 5, 0.4, 0, Math.PI * 2); ctx.fill();
+    }
+  } else if (g.theme === 'cave') { // crystals breathing, and drips from the stalactites
+    ctx.fillStyle = `rgba(150,220,255,${0.04 + Math.sin(t * 1.5) * 0.03})`;
+    ctx.fillRect(0, 0, BW, BH);
+    for (let i = 0; i < 5; i++) {
+      const period = 2.2 + i * 0.4, k = ((t + i * 0.9) % period) / period, x = ((i * 97 + 40) % BW);
+      ctx.fillStyle = `rgba(170,220,255,${0.8 - k * 0.5})`;
+      ctx.beginPath(); ctx.ellipse(x, 40 + k * k * BH * 0.8, 1.6, 3, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  } else if (g.theme === 'ruins') { // birds crossing the evening sky
+    ctx.strokeStyle = 'rgba(90,60,50,0.6)'; ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) {
+      const x = ((t * (16 + i * 4) + i * 170) % (BW + 80)) - 40, y = 70 + i * 34 + Math.sin(t + i) * 6, f = Math.sin(t * 7 + i) * 4;
+      ctx.beginPath(); ctx.moveTo(x - 8, y - f); ctx.quadraticCurveTo(x - 4, y - 5, x, y); ctx.quadraticCurveTo(x + 4, y - 5, x + 8, y - f); ctx.stroke();
+    }
+  } else if (g.theme === 'desert') { // a tumbleweed rolling by
+    const x = ((t * 40) % (BW + 120)) - 60, y = BH * 0.78 - Math.abs(Math.sin(t * 3)) * 10;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(t * 3);
+    ctx.strokeStyle = 'rgba(150,110,60,0.8)'; ctx.lineWidth = 1.5;
+    for (let k = 0; k < 6; k++) { ctx.beginPath(); ctx.ellipse(0, 0, 11, 6, (k * Math.PI) / 6, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.restore();
+  } else if (g.theme === 'snow') {
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    for (let i = 0; i < 26; i++) {
+      const sx = (i * 97.3) % BW, speed = 18 + (i % 5) * 6;
+      const y = (i * 53 + t * speed) % BH, x = sx + Math.sin(t * 0.8 + i) * 12;
+      ctx.beginPath(); ctx.arc(x, y, 1.6 + (i % 3) * 0.8, 0, Math.PI * 2); ctx.fill();
+    }
+  } else if (g.theme === 'volcano') {
+    for (let i = 0; i < 18; i++) {
+      const speed = 22 + (i % 4) * 8, y = BH - ((i * 71 + t * speed) % BH), x = (i * 131.7) % BW + Math.sin(t * 1.3 + i) * 8;
+      ctx.fillStyle = `rgba(255,${140 + (i % 4) * 25},60,${0.35 + (y / BH) * 0.5})`;
+      ctx.beginPath(); ctx.arc(x, y, 1.5 + (i % 3) * 0.7, 0, Math.PI * 2); ctx.fill();
+    }
+    // Smoke puffing up out of the crater.
+    for (let i = 0; i < 5; i++) {
+      const k = ((t * 0.18 + i / 5) % 1), x = BW * 0.5 + Math.sin(t * 0.7 + i) * 14 + k * 30, y = BH * 0.38 - k * BH * 0.35;
+      ctx.fillStyle = `rgba(80,60,65,${0.35 * (1 - k)})`;
+      ctx.beginPath(); ctx.arc(x, y, 14 + k * 30, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.fillStyle = `rgba(255,90,30,${0.05 + Math.sin(t * 2) * 0.03})`; // the heat pulsing
+    ctx.fillRect(0, 0, BW, BH);
+  }
+}
 const sceneryCache = {};
 /** The scenery behind the board, painted once (at double resolution, for sharp phone screens). */
 export function scenery(theme) {
@@ -700,15 +1052,15 @@ export function scenery(theme) {
 
 /** The whole board. `fx` holds short-lived effects (booms, sparkles) from main.js. */
 export function drawBoard(ctx, g, t, colors, fx) {
-  // Scenery (forest, cave or ruins), or plain sky.
+  // Scenery (the place on Poko's journey), or plain sky.
   const bg = g.theme && PAINT[g.theme] ? scenery(g.theme) : null;
   if (bg) {
     colors = { ...colors, ...THEME_COLORS[g.theme] };
     ctx.drawImage(bg, 0, 0, g.w * CELL, g.vh * CELL);
-    if (g.theme === 'cave') { // crystals breathing
-      ctx.fillStyle = `rgba(150,220,255,${0.04 + Math.sin(t * 1.5) * 0.03})`;
-      ctx.fillRect(0, 0, g.w * CELL, g.vh * CELL);
-    }
+    // A soft veil over the scenery so the blocks, rock and Poko stand out in front of it.
+    ctx.fillStyle = HAZE[g.theme];
+    ctx.fillRect(0, 0, g.w * CELL, g.vh * CELL);
+    sceneryMotion(ctx, g, t);
   } else {
     const sky = ctx.createLinearGradient(0, 0, 0, g.vh * CELL);
     sky.addColorStop(0, colors.skyTop);
