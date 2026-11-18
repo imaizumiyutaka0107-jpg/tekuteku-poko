@@ -5,6 +5,7 @@
 // Nov 2026) the stage comes from v3 on the 12 × 18 board. The blocks are drawn the same way.
 import * as w1 from './weekly-v1.js';
 import { generateWith } from './v3.js';
+import { generateBridge } from './bridge.js';
 import { pieceWeights } from './v1.js';
 
 export const { weekOf, weekStart, weekEnd, weeklyBlocks } = w1;
@@ -14,5 +15,8 @@ const LEVEL = 40;
 /** This week's stage. */
 export function weeklyStage(week) {
   if (week < WIDE_FROM) return w1.weeklyStage(week);
-  return { ...generateWith(LEVEL, (week * 104729 + 99991) | 0), weights: pieceWeights(LEVEL) };
+  const seed = (week * 104729 + 99991) | 0;
+  // Every fourth week (from the week of 23 Nov 2026) is a bridge stage.
+  const def = week % 4 === 0 ? generateBridge(LEVEL, seed, 12) : generateWith(LEVEL, seed);
+  return { ...def, weights: pieceWeights(LEVEL) };
 }

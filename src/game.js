@@ -62,7 +62,7 @@ export function makeGame(def, rand = Math.random) {
   const g = {
     ...st,
     walker: { ...st.walker, fromX: st.walker.x, fromY: st.walker.y, act: 'idle' },
-    vh: Math.min(st.h, Math.round(st.w * 1.5)), // rows on screen: 18 on the 12-wide board
+    vh: def.vh ?? Math.min(st.h, st.w <= 12 ? Math.round(st.w * 1.5) : 18), // rows on screen: 18 (15 on the old 10-wide board)
     waterEvery: (def.water ?? 14) * MAGMA_SLOW, // seconds for the magma to rise one row
     bombs: def.bombs ?? false,
     weights: def.weights ?? WEIGHTS, // how often each piece comes (harder shapes later on)

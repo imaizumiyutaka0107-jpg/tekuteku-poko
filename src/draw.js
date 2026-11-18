@@ -1,4 +1,4 @@
-// Drawing the stage: rock, blocks, the falling piece and where it will land, Poko, the door,
+// Drawing the stage: rock, blocks, the falling piece and where it will land, Poko, the gold,
 // stars and the water. Everything is in board units: one cell is CELL wide.
 import { W, H, ROCK, BLOCK, at, pieceCells, dropDistance, landsOnWalker, crushGap, walkerInterval, waterTop, viewTop, START_DELAY, SHAPES, PIECE_COLOR, TRIP } from './game.js';
 import { realBackground, realTerrain, realCrate, realStone, realLava } from './real.js';
@@ -89,27 +89,51 @@ function drawRock(ctx, g, x, y, colors) {
   }
 }
 
-/** The realistic door: wooden planks in a stone arch, with a little flag. */
-function drawRealDoor(ctx, ex, ey, t) {
-  const x = ex * CELL, y = ey * CELL;
-  const arch = ctx.createLinearGradient(x, 0, x + CELL, 0);
-  arch.addColorStop(0, '#5e5b57'); arch.addColorStop(0.5, '#9a958e'); arch.addColorStop(1, '#55524e');
-  ctx.fillStyle = arch;
-  ctx.beginPath(); ctx.moveTo(x + 3, y + CELL); ctx.lineTo(x + 3, y + 15); ctx.arc(x + CELL / 2, y + 15, CELL / 2 - 3, Math.PI, 0); ctx.lineTo(x + CELL - 3, y + CELL); ctx.fill();
-  ctx.strokeStyle = 'rgba(40,38,36,0.6)'; ctx.lineWidth = 1;
-  for (const a of [-2.6, -1.9, -1.2, -0.5]) { ctx.beginPath(); ctx.moveTo(x + CELL / 2 + Math.cos(a) * 9, y + 15 + Math.sin(a) * 9); ctx.lineTo(x + CELL / 2 + Math.cos(a) * 17, y + 15 + Math.sin(a) * 17); ctx.stroke(); }
-  const wood = ctx.createLinearGradient(x, 0, x + CELL, 0);
-  wood.addColorStop(0, '#4a2e1a'); wood.addColorStop(0.5, '#8a5a34'); wood.addColorStop(1, '#3e2614');
-  ctx.fillStyle = wood;
-  ctx.beginPath(); ctx.moveTo(x + 8, y + CELL); ctx.lineTo(x + 8, y + 16); ctx.arc(x + CELL / 2, y + 16, CELL / 2 - 8, Math.PI, 0); ctx.lineTo(x + CELL - 8, y + CELL); ctx.fill();
-  ctx.strokeStyle = 'rgba(25,14,8,0.6)';
-  for (const k of [15, 20, 25]) { ctx.beginPath(); ctx.moveTo(x + k, y + 9); ctx.lineTo(x + k, y + CELL); ctx.stroke(); }
-  ctx.fillStyle = '#3a3a3e'; ctx.fillRect(x + 9, y + 20, 22, 2.5); ctx.fillRect(x + 9, y + 32, 22, 2.5);
-  ctx.fillStyle = '#e1b84a'; ctx.beginPath(); ctx.arc(x + CELL - 13, y + 27, 2.2, 0, Math.PI * 2); ctx.fill();
-  // The flag on top, flapping.
-  ctx.strokeStyle = '#3a3a3e'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + CELL / 2, y - 1); ctx.lineTo(x + CELL / 2, y - 16); ctx.stroke();
-  const f = Math.sin(t * 5) * 2;
-  ctx.fillStyle = '#e8484f'; ctx.beginPath(); ctx.moveTo(x + CELL / 2, y - 16); ctx.quadraticCurveTo(x + CELL / 2 + 7, y - 15 + f, x + CELL / 2 + 13, y - 12); ctx.lineTo(x + CELL / 2, y - 8); ctx.fill();
+/**
+ * The goal: a heap of gold nuggets on the ground, glowing, with sparkles twinkling round it.
+ * (Until 18 Nov 2026 the goal was a door.)
+ */
+function nugget(ctx, pts, light, dark) {
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const gr = ctx.createRadialGradient(x0 + (x1 - x0) * 0.35, y0 + (y1 - y0) * 0.3, 1, (x0 + x1) / 2, (y0 + y1) / 2, Math.max(x1 - x0, y1 - y0) * 0.75);
+  gr.addColorStop(0, '#fff6c2'); gr.addColorStop(0.35, light); gr.addColorStop(1, dark);
+  ctx.fillStyle = gr;
+  ctx.beginPath();
+  pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(110,70,5,0.75)'; ctx.lineWidth = 1.2; ctx.stroke();
+}
+function drawGold(ctx, ex, ey, t) {
+  const x = ex * CELL, y = ey * CELL, cx = x + CELL / 2, base = y + CELL - 1;
+  // A warm glow behind the heap, breathing slowly.
+  const glow = ctx.createRadialGradient(cx, base - 10, 2, cx, base - 10, CELL * 0.95);
+  glow.addColorStop(0, `rgba(255,215,90,${0.45 + Math.sin(t * 2.5) * 0.12})`); glow.addColorStop(1, 'rgba(255,200,60,0)');
+  ctx.fillStyle = glow; ctx.fillRect(x - CELL / 2, y - CELL / 2, CELL * 2, CELL * 1.5);
+  // Shadow on the ground.
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.beginPath(); ctx.ellipse(cx, base, 17, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+  // Three nuggets: two at the back, the big one in front.
+  nugget(ctx, [[x + 4, base], [x + 6, base - 9], [x + 12, base - 14], [x + 19, base - 11], [x + 21, base - 3], [x + 17, base]], '#f2c53a', '#9a6a0a');
+  nugget(ctx, [[x + 20, base], [x + 22, base - 12], [x + 28, base - 17], [x + 35, base - 13], [x + 37, base - 4], [x + 33, base]], '#f5ca40', '#946408');
+  nugget(ctx, [[x + 10, base], [x + 11, base - 13], [x + 17, base - 22], [x + 25, base - 23], [x + 31, base - 15], [x + 30, base - 5], [x + 26, base]], '#ffd84d', '#a87410');
+  // Facets on the big one.
+  ctx.strokeStyle = 'rgba(255,250,215,0.75)'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(x + 15, base - 16); ctx.lineTo(x + 19, base - 20); ctx.lineTo(x + 24, base - 20); ctx.stroke();
+  ctx.strokeStyle = 'rgba(120,75,5,0.45)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x + 18, base - 9); ctx.lineTo(x + 24, base - 13); ctx.lineTo(x + 29, base - 10); ctx.stroke();
+  // Sparkles: little four-point stars popping up in turn.
+  for (let k = 0; k < 3; k++) {
+    const ph = (t * 0.9 + k / 3) % 1;
+    if (ph > 0.45) continue;
+    const a = Math.sin((ph / 0.45) * Math.PI);
+    const sx = x + [9, 30, 21][k], sy = base - [18, 21, 30][k], r = 2 + a * 4;
+    ctx.fillStyle = `rgba(255,255,240,${a})`;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - r); ctx.lineTo(sx + r * 0.25, sy - r * 0.25); ctx.lineTo(sx + r, sy); ctx.lineTo(sx + r * 0.25, sy + r * 0.25);
+    ctx.lineTo(sx, sy + r); ctx.lineTo(sx - r * 0.25, sy + r * 0.25); ctx.lineTo(sx - r, sy); ctx.lineTo(sx - r * 0.25, sy - r * 0.25);
+    ctx.closePath(); ctx.fill();
+  }
 }
 
 /** A gold star with a shine sweeping across it. */
@@ -123,34 +147,6 @@ function drawGoldStar(ctx, cx, cy, r, t) {
   ctx.strokeStyle = 'rgba(120,80,10,0.6)'; ctx.lineWidth = 1; ctx.stroke();
   const s = (t * 0.8) % 3; // a glint now and then
   if (s < 0.6) { ctx.fillStyle = `rgba(255,255,255,${0.8 * Math.sin((s / 0.6) * Math.PI)})`; ctx.beginPath(); ctx.arc(cx - r * 0.3, cy - r * 0.35, r * 0.18, 0, Math.PI * 2); ctx.fill(); }
-}
-
-function drawDoor(ctx, ex, ey, t) {
-  const x = ex * CELL, y = ey * CELL;
-  ctx.fillStyle = '#8d5a3b';
-  ctx.beginPath();
-  ctx.moveTo(x + 6, y + CELL);
-  ctx.lineTo(x + 6, y + 16);
-  ctx.arc(x + CELL / 2, y + 16, CELL / 2 - 6, Math.PI, 0);
-  ctx.lineTo(x + CELL - 6, y + CELL);
-  ctx.fill();
-  ctx.fillStyle = '#ffd43b';
-  ctx.beginPath();
-  ctx.arc(x + CELL - 13, y + 26, 2.6, 0, Math.PI * 2);
-  ctx.fill();
-  // A little flag on top, waving.
-  ctx.strokeStyle = '#5c3d2e';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x + CELL / 2, y + 2);
-  ctx.lineTo(x + CELL / 2, y - 16);
-  ctx.stroke();
-  ctx.fillStyle = '#ff6b8b';
-  ctx.beginPath();
-  ctx.moveTo(x + CELL / 2, y - 16);
-  ctx.quadraticCurveTo(x + CELL / 2 + 8, y - 15 + Math.sin(t * 6) * 2, x + CELL / 2 + 15, y - 11);
-  ctx.lineTo(x + CELL / 2, y - 6);
-  ctx.fill();
 }
 
 export function drawStar(ctx, cx, cy, r, fill = '#ffd43b') {
@@ -1140,7 +1136,7 @@ export function drawBoard(ctx, g, t, colors, fx) {
       else if (c === BLOCK) drawBlock(ctx, x * CELL, y * CELL, BLOCK_COLORS[g.colors[y * g.w + x]]);
     }
   }
-  if (real) drawRealDoor(ctx, g.exit.x, g.exit.y, t); else drawDoor(ctx, g.exit.x, g.exit.y, t);
+  drawGold(ctx, g.exit.x, g.exit.y, t);
   for (const s of g.stars) {
     if (s.got) continue;
     const pulse = 1 + Math.sin(t * 4 + s.x) * 0.08;
@@ -1282,7 +1278,7 @@ export function drawBoard(ctx, g, t, colors, fx) {
   if (g.exit.y < cam - 0.5) drawDoorAbove(ctx, g, t);
 }
 
-/** Off the top of the view: a small arrow and door so you know where Poko is heading. */
+/** Off the top of the view: a small arrow and gold nugget so you know where Poko is heading. */
 function drawDoorAbove(ctx, g, t) {
   const x = g.exit.x * CELL + CELL / 2, y = 14 + Math.sin(t * 5) * 3;
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -1294,9 +1290,9 @@ function drawDoorAbove(ctx, g, t) {
   ctx.lineTo(x - 7, y + 2);
   ctx.lineTo(x + 7, y + 2);
   ctx.fill();
-  ctx.fillStyle = '#c47a3a';
-  roundRect(ctx, x - 5, y + 4, 10, 13, 3);
-  ctx.fill();
+  ctx.fillStyle = '#f2c53a';
+  ctx.beginPath(); ctx.moveTo(x - 7, y + 16); ctx.lineTo(x - 5, y + 8); ctx.lineTo(x, y + 5); ctx.lineTo(x + 6, y + 8); ctx.lineTo(x + 7, y + 16); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(110,70,5,0.8)'; ctx.lineWidth = 1; ctx.stroke();
 }
 
 /**

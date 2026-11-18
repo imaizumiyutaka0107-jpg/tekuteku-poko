@@ -1,7 +1,8 @@
 // Poko's Path: the screens (home with the stage list, and a stage being played), input and sound.
 // Plays the same with a finger (buttons or gestures on the board), a mouse, or a keyboard.
 import { W, H, waterTop, makeGame, update, move, rotate, hardDrop, setSoft, takeEvents, starsGot, crushGap, canRevive, revive } from './game.js';
-import { rewardedReady, showRewarded } from './ads.js';
+import { initAds, rewardedReady, showRewarded, betweenStages } from './ads.js';
+import { PORTAL, ON_CRAZYGAMES, initPortal, setPlaying, happytime } from './portal.js';
 import { getStage, climbOf } from './stages.js';
 import { weekOf, weekStart, weekEnd, weeklyStage, weeklyBlocks } from './gen/weekly.js';
 import { CELL, drawBoard, drawPiecePreview, drawPoko, themeOf, scenery } from './draw.js';
@@ -38,9 +39,14 @@ const totalStars = () => Object.values(bestStars()).reduce((a, b) => a + b, 0);
 setCurrentLang(detectLang(load().lang));
 document.documentElement.lang = getCurrentLang();
 const app = document.getElementById('app');
+initPortal();
 
 // ---------- Running as the phone app (Capacitor) or in a browser ----------
 const NATIVE = !!window.Capacitor?.isNativePlatform?.();
+// The PC version (a mouse and a big window; the same test as the PC layout in style.css) plays
+// on wider stages: 24 columns instead of 12. Decided when a stage starts.
+const PC_MQ = matchMedia('(hover: hover) and (pointer: fine) and (min-width: 900px) and (min-height: 560px)');
+const wideStage = (n) => getStage(n, { wide: PC_MQ.matches });
 const plugin = (name) => window.Capacitor?.Plugins?.[name];
 // Browsers refuse to vibrate before the player has touched the page.
 let touched = false;
@@ -61,6 +67,7 @@ if (NATIVE) {
     if (location.hash && location.hash !== '#/' && location.hash !== '#') location.hash = '#/';
     else plugin('App').exitApp?.();
   });
+  initAds();
 }
 
 // ---------- Sound: tiny synthesized tones, no files ----------
@@ -144,7 +151,7 @@ function showHome() {
   const tiles = [];
   for (let n = 1; n <= shown; n++) {
     const s = best[n] ?? -1;
-    const climb = trial() && climbOf(getStage(n)) > 0 ? `<span class="tile-climb">${t('climb', climbOf(getStage(n)))}</span>` : '';
+    const climb = trial() && climbOf(wideStage(n)) > 0 ? `<span class="tile-climb">${t('climb', climbOf(wideStage(n)))}</span>` : '';
     tiles.push(n <= open || trial()
       ? `<a class="tile${n === open ? ' current' : ''}" href="#/play/${n}"><b>${n}</b><span class="tile-stars">${s < 0 ? '' : '★'.repeat(s) + '☆'.repeat(3 - s)}</span>${climb}</a>`
       : `<span class="tile locked" aria-label="${t('locked')}"><b>${n}</b><span class="tile-stars">🔒</span></span>`);
@@ -208,7 +215,7 @@ function trialPanel() {
   const picks = [];
   for (const [from, rows] of [[21, 5], [21, 7], [21, 10], [100, 15], [200, 20]]) {
     for (let n = from; n < from + 500; n++) {
-      if (climbOf(getStage(n)) === rows) { picks.push([n, rows]); break; }
+      if (climbOf(wideStage(n)) === rows) { picks.push([n, rows]); break; }
     }
   }
   return `<section class="trial">
@@ -233,7 +240,8 @@ function showHelp(host, onClose) {
 // ---------- A stage ----------
 /** What to play: a numbered stage, or a week's challenge (same blocks for everyone). */
 function stageSpec(n) {
-  return { n, def: getStage(n), title: `${t('stage', n)}${trial() ? ` · ${t('climb', climbOf(getStage(n)))}` : ''}` };
+  const def = wideStage(n);
+  return { n, def, title: `${t('stage', n)}${trial() ? ` · ${t('climb', climbOf(def))}` : ''}` };
 }
 function weeklySpec(week) {
   return { week, def: weeklyStage(week), blocks: () => weeklyBlocks(week), title: t('weeklyShort'), counts: week === weekOf() };
@@ -246,7 +254,7 @@ function playStage(spec) {
   app.innerHTML = `
     <canvas class="pc-backdrop" aria-hidden="true"></canvas>
     <aside class="pc-panel">
-      <button class="pc-full">⛶ ${t('fullscreen')}</button>
+      ${ON_CRAZYGAMES ? '' : `<button class="pc-full">⛶ ${t('fullscreen')}</button>`}
       <h2>${t('controls')}</h2>
       <ul class="pc-keys">${rows(t('pcMouse'))}</ul>
       <ul class="pc-keys">${rows(t('pcKeys'))}</ul>
@@ -277,6 +285,9 @@ function playStage(spec) {
   function start() {
     g = makeGame(spec.def, spec.blocks?.());
     g.theme = themeOf(n, spec.week);
+    // The board's shape in the page follows the stage (12 × 18, or 24 × 18 on PC).
+    $('.board-wrap').style.setProperty('--cols', g.w);
+    $('.board-wrap').style.setProperty('--rows', g.vh);
     fx = [];
     time = 0;
     paused = false;
@@ -306,7 +317,7 @@ function playStage(spec) {
     $('.star-row').textContent = '★'.repeat(got) + '☆'.repeat(3 - got);
   }
 
-  // Sizing: the board keeps its 10 × 15 shape and fits the space left for it.
+  // Sizing: the board keeps the stage's shape (cols × rows) and fits the space left for it.
   function resize() {
     const dpr = window.devicePixelRatio || 1;
     const width = canvas.clientWidth;
@@ -322,7 +333,7 @@ function playStage(spec) {
   // softened by CSS), and a full-screen switch.
   const backdrop = $('.pc-backdrop');
   function paintBackdrop() {
-    if (getComputedStyle($('.pc-panel')).display === 'none') return; // phone layout
+    if (!PC_MQ.matches) return; // phone layout
     const img = scenery(themeOf(n, spec.week));
     if (!img) return;
     const w = innerWidth, h = innerHeight, dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -343,7 +354,7 @@ function playStage(spec) {
     if (document.fullscreenElement) document.exitFullscreen?.();
     else document.documentElement.requestFullscreen?.().catch(() => {});
   };
-  $('.pc-full').onclick = (e) => { toggleFull(); e.currentTarget.blur(); };
+  if ($('.pc-full')) $('.pc-full').onclick = (e) => { toggleFull(); e.currentTarget.blur(); };
 
   // ----- Input -----
   const act = (fn) => { if (!paused && g.status === 'play') fn(); };
@@ -425,7 +436,7 @@ function playStage(spec) {
     if (e.target.closest?.('input, textarea')) return;
     const k = e.key;
     if (k === 'Escape' || k === 'p' || k === 'P') { togglePause(); e.preventDefault(); return; }
-    if ((k === 'f' || k === 'F') && !e.repeat) { toggleFull(); e.preventDefault(); return; }
+    if ((k === 'f' || k === 'F') && !e.repeat && !ON_CRAZYGAMES) { toggleFull(); e.preventDefault(); return; }
     if (k === 'ArrowLeft' || k === 'a' || k === 'A') act(() => move(g, -1));
     else if (k === 'ArrowRight' || k === 'd' || k === 'D') act(() => move(g, 1));
     else if (k === 'ArrowUp' || k === 'x' || k === 'X' || k === 'w' || k === 'W') { if (!e.repeat) act(() => rotate(g)); }
@@ -469,11 +480,21 @@ function playStage(spec) {
     if (g.status === 'won') {
       const best = bestStars();
       if (!trial() && (best[n] ?? -1) < got) save({ stars: { ...best, [n]: got } });
+      if (got === 3) happytime();
       el.innerHTML = `<p class="over-title">${t('clear')}</p>
         <p class="big-stars">${[0, 1, 2].map((k) => `<span class="${k < got ? 'on' : ''}" style="animation-delay:${k * 0.18}s">★</span>`).join('')}</p>
         <a class="primary next-stage" href="#/play/${n + 1}">${t('nextStage')}</a>
         <button class="ghost retry">${t('retry')}</button>
         <a class="ghost" href="#/">${t('stages')}</a>`;
+      // Now and then a full-screen ad between stages (app only; never in the first stages).
+      const nx = el.querySelector('.next-stage');
+      nx.onclick = async (e) => {
+        e.preventDefault();
+        if (nx.dataset.busy) return;
+        nx.dataset.busy = '1';
+        await betweenStages(n);
+        location.hash = `#/play/${n + 1}`;
+      };
     } else {
       // Once per try: watch a video to carry on from here (only when an ad is available).
       const offer = canRevive(g) && rewardedReady();
@@ -536,6 +557,7 @@ function playStage(spec) {
   const DT = 1 / 60;
   function loop(now) {
     if (!alive) return;
+    setPlaying(!paused && !shownEnd && g.status === 'play');
     acc += Math.min(0.1, (now - last) / 1000);
     last = now;
     while (acc >= DT) {
@@ -584,6 +606,7 @@ function playStage(spec) {
 
   return () => {
     alive = false;
+    setPlaying(false);
     stopRepeat();
     ro.disconnect();
     window.removeEventListener('resize', paintBackdrop);
@@ -594,8 +617,7 @@ function playStage(spec) {
 }
 
 async function shareText(text, btn) {
-  const url = location.href.split('#')[0];
-  const full = `${text}\n${url}`;
+  const full = PORTAL ? text : `${text}\n${location.href.split('#')[0]}`;
   try {
     if (navigator.share) { await navigator.share({ text: full }); return; }
   } catch (e) { if (e?.name === 'AbortError') return; }
@@ -615,6 +637,6 @@ async function shareText(text, btn) {
 route();
 
 // (Not in the app: its files are on the phone already.)
-if (!NATIVE && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+if (!NATIVE && !PORTAL && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }

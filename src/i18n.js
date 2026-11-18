@@ -2,7 +2,7 @@
 const STRINGS = {
   en: {
     title: 'Poko’s Path',
-    tagline: 'Poko walks on his own. Drop blocks to build him a way to the door before the magma rises!',
+    tagline: 'Poko walks on his own. Drop blocks to build him a way to the gold before the magma rises!',
     play: 'Play',
     continueAt: (n) => `Play stage ${n}`,
     stages: 'Stages',
@@ -62,7 +62,7 @@ const STRINGS = {
   },
   ja: {
     title: 'てくてくポコ',
-    tagline: 'ポコは勝手に歩きます。ブロックを落として道を作り、マグマが上がる前にとびらまで連れていこう！',
+    tagline: 'ポコは勝手に歩きます。ブロックを落として道を作り、マグマが上がる前に金の塊まで連れていこう！',
     play: 'あそぶ',
     continueAt: (n) => `ステージ ${n} をあそぶ`,
     stages: 'ステージ',

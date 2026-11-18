@@ -9,6 +9,8 @@
 import * as v1 from './gen/v1.js';
 import * as v2 from './gen/v2.js';
 import * as v3 from './gen/v3.js';
+import * as wide from './gen/wide.js';
+import { isBridge, bridge } from './gen/bridge.js';
 
 // The board is 12 × 18 cells (it was 10 × 15 until 17 Nov 2026).
 const EMPTY_ROW = '............';
@@ -74,7 +76,13 @@ export const { shapeHardness, pieceWeights, climbMedian, climbOf, walksHome, pla
 // on, only add eras.
 //
 // v3 (the 12 × 18 board) replaced v2 for every stage the same day, after more play-testing.
-const ERAS = [{ from: 6, make: v3.generate }];
+//
+// Bridge stages (gen/bridge.js) took over one stage in five from stage 11 on 18 Nov 2026
+// (13, 18, 23, ...): high cliffs, the gold across a valley.
+const ERAS = [
+  { from: 6, make: v3.generate },
+  { from: 11, make: (n) => (isBridge(n) ? bridge(n, 12) : v3.generate(n)) },
+];
 
 /** Stage n (6 and up), made from its number by the maker of its era. */
 export function generateStage(n) {
@@ -83,8 +91,17 @@ export function generateStage(n) {
 
 export const HAND = HAND_MAPS.map((def, i) => ({ ...def, water: v1.magmaSpeed(def, i + 1), weights: v1.pieceWeights(i + 1) }));
 
-export function getStage(n) {
-  return n <= HAND.length ? HAND[n - 1] : generateStage(n);
+/**
+ * Stage n. With { wide: true }, the PC version's 24-column stage of that number instead: the
+ * same lessons and difficulty curve on a board twice as wide (see gen/wide.js).
+ */
+export function getStage(n, { wide: isWide = false } = {}) {
+  if (!isWide) return n <= HAND.length ? HAND[n - 1] : generateStage(n);
+  if (n <= HAND_MAPS.length) {
+    const def = wide.widenHand(HAND_MAPS[n - 1]);
+    return { ...def, water: v1.magmaSpeed(def, n), weights: v1.pieceWeights(n) };
+  }
+  return isBridge(n) ? bridge(n, wide.W) : wide.generate(n);
 }
 
 /** Stages 1 to RELEASED are recorded in tests/stage-fingerprints.json and may never change. */
